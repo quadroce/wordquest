@@ -11,6 +11,7 @@ import {
   Star,
   Timer,
   Trophy,
+  Cookie,
 } from 'lucide-react'
 import questions from './assets/data/definizionisbagliate.json'
 
@@ -19,7 +20,27 @@ const DEFAULT_SECONDS = 900
 const HINTS_PER_GAME = 3
 const BASE_POINTS = 100
 const HIGH_SCORE_KEY = 'wordquest-high-score'
+const COOKIE_CONSENT_KEY = 'wordquest-cookie-consent'
 const LETTERS = ['A', 'B', 'C']
+
+function readCookieConsent() {
+  try {
+    const value = window.localStorage.getItem(COOKIE_CONSENT_KEY)
+    return value === 'granted' || value === 'denied' ? value : null
+  } catch {
+    return null
+  }
+}
+
+function applyAnalyticsConsent(granted) {
+  if (typeof window.gtag !== 'function') return
+  window.gtag('consent', 'update', {
+    analytics_storage: granted ? 'granted' : 'denied',
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+  })
+}
 
 function shuffle(list) {
   const next = [...list]
@@ -638,11 +659,14 @@ export default function App() {
 
 function Shell({ children }) {
   return (
-    <div className="relative min-h-svh overflow-hidden">
-      <div className="pointer-events-none absolute -left-16 top-10 h-48 w-48 rounded-full bg-pink-500/20 blur-3xl animate-float" />
-      <div className="pointer-events-none absolute right-0 top-24 h-56 w-56 rounded-full bg-blue-600/20 blur-3xl animate-float" />
-      <div className="relative">{children}</div>
-    </div>
+    <>
+      <div className="relative min-h-svh overflow-hidden">
+        <div className="pointer-events-none absolute -left-16 top-10 h-48 w-48 rounded-full bg-pink-500/20 blur-3xl animate-float" />
+        <div className="pointer-events-none absolute right-0 top-24 h-56 w-56 rounded-full bg-blue-600/20 blur-3xl animate-float" />
+        <div className="relative">{children}</div>
+      </div>
+      <CookieConsent />
+    </>
   )
 }
 
@@ -707,6 +731,67 @@ function SetupScreen({ selectedMinutes, onMinutesChange, highScore, onStart }) {
           <Play className="h-7 w-7 fill-white" />
           Start the quest
         </button>
+      </div>
+    </div>
+  )
+}
+
+function CookieConsent() {
+  const [open, setOpen] = useState(() => readCookieConsent() == null)
+
+  const saveChoice = (next) => {
+    try {
+      window.localStorage.setItem(COOKIE_CONSENT_KEY, next)
+    } catch {
+      /* ignore */
+    }
+    applyAnalyticsConsent(next === 'granted')
+    setOpen(false)
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="fixed bottom-4 left-4 z-40 inline-flex items-center gap-2 rounded-full border border-white/15 bg-slate-900/90 px-3 py-2 text-xs font-bold text-slate-200 shadow-lg backdrop-blur hover:bg-slate-800"
+      >
+        <Cookie className="h-4 w-4 text-pink-300" />
+        Cookie
+      </button>
+    )
+  }
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-50 p-4">
+      <div className="mx-auto flex max-w-3xl flex-col gap-4 rounded-3xl border border-white/10 bg-slate-950/95 p-5 shadow-2xl shadow-pink-500/10 backdrop-blur sm:flex-row sm:items-center">
+        <div className="flex-1">
+          <p className="inline-flex items-center gap-2 font-display text-lg text-white">
+            <Cookie className="h-5 w-5 text-pink-400" />
+            Cookie e privacy
+          </p>
+          <p className="mt-2 text-sm text-slate-300">
+            WordQuest usa Google Analytics solo se accetti. Serve a capire come viene usato il gioco,
+            in forma aggregata. Non usiamo cookie di pubblicità. Puoi rifiutare e giocare lo stesso.
+            La scelta viene salvata su questo dispositivo.
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col gap-2 sm:w-44">
+          <button
+            type="button"
+            onClick={() => saveChoice('granted')}
+            className="rounded-2xl bg-gradient-to-r from-pink-500 to-blue-600 px-4 py-3 font-display text-lg text-white"
+          >
+            Accetta
+          </button>
+          <button
+            type="button"
+            onClick={() => saveChoice('denied')}
+            className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 font-bold text-slate-200 hover:bg-white/10"
+          >
+            Rifiuta
+          </button>
+        </div>
       </div>
     </div>
   )

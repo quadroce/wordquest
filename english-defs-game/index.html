@@ -2,14 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYCTEEENZG"></script>
     <script>
       window.dataLayer = window.dataLayer || []
       function gtag() {
         dataLayer.push(arguments)
       }
+      gtag('consent', 'default', {
+        analytics_storage: 'denied',
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+        wait_for_update: 500,
+      })
+      try {
+        if (localStorage.getItem('wordquest-cookie-consent') === 'granted') {
+          gtag('consent', 'update', { analytics_storage: 'granted' })
+        }
+      } catch {
+        /* ignore */
+      }
+    </script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DYCTEEENZG"></script>
+    <script>
       gtag('js', new Date())
-      gtag('config', 'G-DYCTEEENZG')
+      gtag('config', 'G-DYCTEEENZG', { anonymize_ip: true })
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
