@@ -484,8 +484,15 @@ export default function App() {
 
     setStreak(0)
     setChoiceResult('wrong')
-    setFeedback('That was not the right meaning. Look at the green card.')
-    advanceTimeout.current = window.setTimeout(() => goToNextWord(score), 1500)
+    setFeedback('Not this one. Watch the red card — then try again.')
+    advanceTimeout.current = window.setTimeout(() => {
+      if (!currentEntry) return
+      setChoiceOptions(buildChoices(currentEntry, currentWordIndex))
+      setHiddenChoiceId(null)
+      setSelectedChoiceId(null)
+      setChoiceResult(null)
+      setFeedback('The cards are shuffled. Pick the definition that matches this word.')
+    }, 900)
   }
 
   if (!gameStarted) {
@@ -632,7 +639,7 @@ export default function App() {
               {choiceOptions.map((option, index) => {
                 const hidden = option.id === hiddenChoiceId
                 const selected = selectedChoiceId === option.id
-                const showCorrect = choiceResult && option.correct
+                const showCorrect = choiceResult === 'correct' && option.correct
                 const showWrong = choiceResult === 'wrong' && selected && !option.correct
                 return (
                   <li key={option.id} className={hidden ? 'hidden' : ''}>
