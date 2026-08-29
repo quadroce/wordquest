@@ -1,0 +1,266 @@
+[
+  {
+    "word": "castle",
+    "correct_definition": "a big old building; a rich person lives here",
+    "incorrect_definitions": [
+      "a small wooden house where poor farmers live and store grain",
+      "a large stone wall built around a city to catch fish"
+    ]
+  },
+  {
+    "word": "princess",
+    "correct_definition": "an important woman in a small country",
+    "incorrect_definitions": [
+      "a young girl who works in the kitchen of a big restaurant",
+      "an important woman who leads an army into space"
+    ]
+  },
+  {
+    "word": "king",
+    "correct_definition": "the most important man in a country",
+    "incorrect_definitions": [
+      "a young boy who helps build wooden houses in a village",
+      "the most famous doctor in a big city hospital"
+    ]
+  },
+  {
+    "word": "kingdom",
+    "correct_definition": "the country of a king",
+    "incorrect_definitions": [
+      "a small boat used by sailors to cross the ocean",
+      "a large park where children go to play sports"
+    ]
+  },
+  {
+    "word": "fight",
+    "correct_definition": "to hit someone again and again; when you hit someone many times",
+    "incorrect_definitions": [
+      "to speak very quietly to someone so nobody else can hear",
+      "to run very fast away from a scary animal"
+    ]
+  },
+  {
+    "word": "forest",
+    "correct_definition": "a place with lots of trees",
+    "incorrect_definitions": [
+      "a big open field with no trees and lots of sand",
+      "a quiet room inside a castle with many books"
+    ]
+  },
+  {
+    "word": "plant",
+    "correct_definition": "a small green thing, with leaves, and sometimes with flowers",
+    "incorrect_definitions": [
+      "a small wooden box used to store old clothes",
+      "a hard red stone found under the water in the sea"
+    ]
+  },
+  {
+    "word": "hunter",
+    "correct_definition": "this person looks for and kills animals",
+    "incorrect_definitions": [
+      "this person buys and sells fruit in the city market",
+      "this person takes care of sick horses on a farm"
+    ]
+  },
+  {
+    "word": "enchantress",
+    "correct_definition": "a woman who uses magic or spells",
+    "incorrect_definitions": [
+      "a woman who cooks food for soldiers in a war",
+      "a woman who sings songs on a big wooden ship"
+    ]
+  },
+  {
+    "word": "bully",
+    "correct_definition": "(plural bullies) a person who does bad things to somebody and makes them feel afraid; to do bad things to somebody and make them feel afraid",
+    "incorrect_definitions": [
+      "a person who helps new students find their classrooms",
+      "a person who gives presents to everyone in the village"
+    ]
+  },
+  {
+    "word": "jump",
+    "correct_definition": "to move suddenly from one place to a different place",
+    "incorrect_definitions": [
+      "to lie down on the floor and fall asleep slowly",
+      "to sit very quietly in a chair for a long time"
+    ]
+  },
+  {
+    "word": "fall",
+    "correct_definition": "to go down suddenly",
+    "incorrect_definitions": [
+      "to climb up a very tall tree slowly",
+      "to fly high up into the clouds like a bird"
+    ]
+  },
+  {
+    "word": "ground",
+    "correct_definition": "we walk on this",
+    "incorrect_definitions": [
+      "the white clouds that we see high up in the sky",
+      "the deep water at the bottom of the ocean"
+    ]
+  },
+  {
+    "word": "dream",
+    "correct_definition": "pictures that you see in your head when you are sleeping",
+    "incorrect_definitions": [
+      "words that you write down on paper with a blue pen",
+      "sounds that you hear when you walk through a crowded market"
+    ]
+  },
+  {
+    "word": "oak",
+    "correct_definition": "a kind of big tree; we often find them in England",
+    "incorrect_definitions": [
+      "a small green flower that grows near river banks",
+      "a kind of fast fish that swims in cold oceans"
+    ]
+  },
+  {
+    "word": "enemy",
+    "correct_definition": "(plural enemies) someone who is not a friend",
+    "incorrect_definitions": [
+      "a close neighbor who helps you fix your house",
+      "a person who works with you to make nice paintings"
+    ]
+  },
+  {
+    "word": "toad",
+    "correct_definition": "a small fat animal with strong back legs; it can jump well and it can live on land and in water",
+    "incorrect_definitions": [
+      "a big white bird with long legs that catches fish",
+      "a small brown insect that flies only at night"
+    ]
+  },
+  {
+    "word": "demon",
+    "correct_definition": "a very bad person",
+    "incorrect_definitions": [
+      "a very kind person who takes care of injured animals",
+      "a famous soldier who protects the king's family"
+    ]
+  },
+  {
+    "word": "dragon",
+    "correct_definition": "a big animal that can fly through the sky and send fire from its mouth",
+    "incorrect_definitions": [
+      "a tiny fish that lives in small ponds and eats leaves",
+      "a big grey animal with short legs that lives under the ground"
+    ]
+  },
+  {
+    "word": "hare",
+    "correct_definition": "an animal like a big rabbit; it has long ears and it can run very fast",
+    "incorrect_definitions": [
+      "a slow animal with a hard shell on its back",
+      "a small bird that sings early in the morning"
+    ]
+  },
+  {
+    "word": "animal",
+    "correct_definition": "a living being that moves; a dog or a cat is an animal",
+    "incorrect_definitions": [
+      "a wooden chair or table that stays in one place",
+      "a long river that flows into the sea"
+    ]
+  },
+  {
+    "word": "lake",
+    "correct_definition": "a lot of water with land around it",
+    "incorrect_definitions": [
+      "a tall mountain covered with snow all year",
+      "a high wall built to protect a small village"
+    ]
+  },
+  {
+    "word": "fish",
+    "correct_definition": "an animal that lives in water",
+    "incorrect_definitions": [
+      "a small bird that builds nests in tall trees",
+      "a green insect that hops on the grass"
+    ]
+  },
+  {
+    "word": "otter",
+    "correct_definition": "a small, brown animal; it lives in rivers, move very fast, and eats fish",
+    "incorrect_definitions": [
+      "a big black bear that sleeps in a cave all winter",
+      "a fast bird with yellow feathers that flies high"
+    ]
+  },
+  {
+    "word": "bird",
+    "correct_definition": "an animal that can fly through the sky",
+    "incorrect_definitions": [
+      "a small green frog that lives under wet rocks",
+      "a heavy wild boar that runs through dense forests"
+    ]
+  },
+  {
+    "word": "eagle",
+    "correct_definition": "a very large, strong bird",
+    "incorrect_definitions": [
+      "a small quiet mouse that lives inside house walls",
+      "a tiny colorful bug that walks on tree leaves"
+    ]
+  },
+  {
+    "word": "arrow",
+    "correct_definition": "you shoot things with this",
+    "incorrect_definitions": [
+      "a heavy metal shield used to stop sharp swords",
+      "a long rope used to tie boats to the wooden dock"
+    ]
+  },
+  {
+    "word": "convent",
+    "correct_definition": "a church building where women live and work away from the world",
+    "incorrect_definitions": [
+      "a big busy shop where people buy fresh bread and milk",
+      "a sports center where young men train for fights"
+    ]
+  },
+  {
+    "word": "magician",
+    "correct_definition": "somebody that makes things happen in a way that you don't understand",
+    "incorrect_definitions": [
+      "somebody who bakes bread and cakes in a small shop",
+      "somebody who fixes broken wooden wheels on carts"
+    ]
+  },
+  {
+    "word": "weather",
+    "correct_definition": "when there is sun or rain, and it's hot or cold",
+    "incorrect_definitions": [
+      "the time of day when people eat dinner together",
+      "the noise made by big waves hitting the rocks"
+    ]
+  },
+  {
+    "word": "wall",
+    "correct_definition": "the side of a building; something that keeps bad things away",
+    "incorrect_definitions": [
+      "a soft blanket used to keep warm at night",
+      "a open gate where people enter a large garden"
+    ]
+  },
+  {
+    "word": "future",
+    "correct_definition": "the time after now",
+    "incorrect_definitions": [
+      "the time that happened yesterday before morning",
+      "a story about things that happened many years ago"
+    ]
+  },
+  {
+    "word": "pretend",
+    "correct_definition": "to do things to make people think that something is true when it isn't",
+    "incorrect_definitions": [
+      "to tell the complete truth so everyone trusts you",
+      "to forget something that happened to you last week"
+    ]
+  }
+]

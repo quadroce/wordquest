@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fredoka", system-ui, sans-serif;
+  --font-sans: "Nunito", system-ui, sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgb(236 72 153 / 0.16), transparent 50%),
+    radial-gradient(900px 500px at 100% 0%, rgb(59 130 246 / 0.16), transparent 45%),
+    #020617;
+  color: #f8fafc;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-10px);
+  }
+  40% {
+    transform: translateX(10px);
+  }
+  60% {
+    transform: translateX(-6px);
+  }
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(236 72 153 / 0.45);
+  }
+  50% {
+    box-shadow: 0 0 28px 6px rgb(59 130 246 / 0.35);
+  }
+}
+
+.animate-shake {
+  animation: shake 0.45s ease-in-out;
+}
+
+.animate-pop {
+  animation: pop-in 0.35s ease-out;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.glow-cta {
+  animation: pulse-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes timer-flash {
+  0%,
+  100% {
+    color: #fecdd3;
+    text-shadow: 0 0 12px rgb(244 63 94 / 0.8);
+  }
+  50% {
+    color: #ffffff;
+    text-shadow: 0 0 18px rgb(59 130 246 / 0.9);
+  }
+}
+
+.timer-danger {
+  animation: timer-flash 0.75s ease-in-out infinite;
+}
+
+[draggable='true'] {
+  cursor: grab;
+}
+
+[draggable='true']:active {
+  cursor: grabbing;
+}
