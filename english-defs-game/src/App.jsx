@@ -83,6 +83,38 @@ function buildChoices(entry, wordIndex) {
   ])
 }
 
+function placementTone(token, slotIndex) {
+  if (!token) return 'empty'
+  const distance = Math.abs(token.originalIndex - slotIndex)
+  if (distance === 0) return 'green'
+  if (distance === 1) return 'yellow'
+  return 'red'
+}
+
+function isPerfectDefinition(slots) {
+  return slots.length > 0 && slots.every((slot, index) => slot?.originalIndex === index)
+}
+
+function tileToneClass(tone) {
+  if (tone === 'green') {
+    return 'border-emerald-300 bg-emerald-500 text-white shadow-lg shadow-emerald-400/50 ring-2 ring-emerald-200/80'
+  }
+  if (tone === 'yellow') {
+    return 'border-amber-200 bg-amber-400 text-slate-950 shadow-lg shadow-amber-400/50 ring-2 ring-amber-200'
+  }
+  if (tone === 'red') {
+    return 'border-rose-300 bg-rose-600 text-white shadow-lg shadow-rose-500/50 ring-2 ring-rose-200/80'
+  }
+  return 'border-dashed border-white/20 bg-slate-950/70 text-slate-600'
+}
+
+function toneLabel(tone) {
+  if (tone === 'green') return 'Exact place'
+  if (tone === 'yellow') return 'One spot away'
+  if (tone === 'red') return 'Too far from the correct place'
+  return 'Empty slot'
+}
+
 function celebrate() {
   const colors = ['#ec4899', '#3b82f6', '#818cf8', '#f9a8d4', '#38bdf8']
   confetti({ particleCount: 120, spread: 80, origin: { y: 0.65 }, colors })
@@ -133,6 +165,7 @@ export default function App() {
 
   const finishedRef = useRef(false)
   const advanceTimeout = useRef(null)
+  const unscrambleAwarded = useRef(false)
 
   const currentEntry = deck[currentWordIndex]
   const multiplier = streak >= 3 ? 2 : 1
@@ -146,7 +179,8 @@ export default function App() {
     setYourDefinition(Array(tokens.length).fill(null))
     setHintedSlots([])
     setCheckStatus('idle')
-    setFeedback('Tap words to build the definition, then check your answer.')
+    unscrambleAwarded.current = false
+    setFeedback('Pick the definition that matches this word.')
     setChoiceOptions(buildChoices(entry, index))
     setHiddenChoiceId(null)
     setSelectedChoiceId(null)
@@ -232,18 +266,18 @@ export default function App() {
   )
 
   const moveTokenToDefinition = (tokenId) => {
-    if (currentPhase !== 1 || checkStatus === 'correct' || isPaused) return
+    if (currentPhase !== 2 || checkStatus === 'correct' || isPaused) return
     const token = availableWords.find((item) => item.id === tokenId)
     const emptyIndex = yourDefinition.findIndex((slot) => slot == null)
     if (!token || emptyIndex === -1) return
     setAvailableWords((list) => list.filter((item) => item.id !== tokenId))
     setYourDefinition((slots) => slots.map((slot, index) => (index === emptyIndex ? token : slot)))
     setCheckStatus('idle')
-    setFeedback('Keep going — fill every slot, then press Check Answer.')
+    setFeedback('Green is exact, yellow is one spot away, red is farther off.')
   }
 
   const returnTokenToAvailable = (slotIndex) => {
-    if (currentPhase !== 1 || checkStatus === 'correct' || isPaused) return
+    if (currentPhase !== 2 || checkStatus === 'correct' || isPaused) return
     if (hintedSlots.includes(slotIndex)) return
     const token = yourDefinition[slotIndex]
     if (!token) return
@@ -252,75 +286,96 @@ export default function App() {
     setCheckStatus('idle')
   }
 
+  const completeUnscramble = useCallback(() => {
+    if (unscrambleAwarded.current || currentPhase !== 2) return
+    unscrambleAwarded.current = true
+    const awarded = BASE_POINTS * (streak >= 3 ? 2 : 1)
+    const nextScore = score + awarded
+    setScore(nextScore)
+    setWordsSolved((value) => value + 1)
+    setCheckStatus('correct')
+    setFeedback(
+      streak >= 3
+        ? `All green! +${awarded} points with a ${streak}-word streak (2x).`
+        : `All green! +${awarded} points.`,
+    )
+    celebrate()
+    advanceTimeout.current = window.setTimeout(() => goToNextWord(nextScore), 1500)
+  }, [currentPhase, goToNextWord, score, streak])
+
+  useEffect(() => {
+    if (currentPhase !== 2 || isPaused || checkStatus === 'correct') return
+    if (isPerfectDefinition(yourDefinition)) {
+      completeUnscramble()
+    }
+  }, [checkStatus, completeUnscramble, currentPhase, isPaused, yourDefinition])
+
   const checkAnswer = () => {
-    if (!currentEntry || currentPhase !== 1 || checkStatus === 'correct' || isPaused) return
+    if (!currentEntry || currentPhase !== 2 || checkStatus === 'correct' || isPaused) return
     if (yourDefinition.some((slot) => slot == null)) {
       setCheckStatus('wrong')
       setFeedback('Place every word in Your Definition first.')
       return
     }
-    const built = yourDefinition.map((slot) => slot.text).join(' ')
-    const perfect = yourDefinition.every((slot, index) => slot.originalIndex === index)
-    if (built === currentEntry.correct_definition && perfect) {
-      setCheckStatus('correct')
-      setFeedback('Great job! Get ready to pick the meaning.')
-      window.setTimeout(() => setCurrentPhase(2), 900)
+    if (isPerfectDefinition(yourDefinition)) {
+      completeUnscramble()
       return
     }
     setCheckStatus('wrong')
-    setFeedback('Not quite. Try a different order!')
+    setFeedback('Not all green yet. Yellow is close — red is too far. Try another order!')
   }
 
   const handleHint = () => {
     if (hintsLeft <= 0 || isPaused || isGameOver || checkStatus === 'correct' || choiceResult) return
 
     if (currentPhase === 1) {
-      const nextIndex = yourDefinition.findIndex(
-        (slot, index) => !slot || slot.originalIndex !== index,
+      const distractor = choiceOptions.find(
+        (option) => !option.correct && option.id !== hiddenChoiceId,
       )
-      if (nextIndex === -1) return
-
-      const correctToken =
-        availableWords.find((token) => token.originalIndex === nextIndex) ||
-        yourDefinition.find((slot) => slot?.originalIndex === nextIndex)
-      if (!correctToken) return
-
-      let nextAvailable = availableWords.filter((token) => token.id !== correctToken.id)
-      const nextSlots = yourDefinition.map((slot) =>
-        slot?.id === correctToken.id ? null : slot,
-      )
-      const occupant = nextSlots[nextIndex]
-      if (occupant && occupant.id !== correctToken.id) {
-        nextAvailable = [...nextAvailable, occupant]
-      }
-      nextSlots[nextIndex] = correctToken
-
-      setAvailableWords(nextAvailable)
-      setYourDefinition(nextSlots)
-      setHintedSlots((slots) => (slots.includes(nextIndex) ? slots : [...slots, nextIndex]))
+      if (!distractor) return
+      setHiddenChoiceId(distractor.id)
       setHintsLeft((value) => value - 1)
-      setCheckStatus('idle')
-      setFeedback('Hint used: the next word is in the right place.')
+      setFeedback('Hint used: one wrong card is gone.')
       return
     }
 
-    const distractor = choiceOptions.find(
-      (option) => !option.correct && option.id !== hiddenChoiceId,
+    const nextIndex = yourDefinition.findIndex(
+      (slot, index) => !slot || slot.originalIndex !== index,
     )
-    if (!distractor) return
-    setHiddenChoiceId(distractor.id)
+    if (nextIndex === -1) return
+
+    const correctToken =
+      availableWords.find((token) => token.originalIndex === nextIndex) ||
+      yourDefinition.find((slot) => slot?.originalIndex === nextIndex)
+    if (!correctToken) return
+
+    let nextAvailable = availableWords.filter((token) => token.id !== correctToken.id)
+    const nextSlots = yourDefinition.map((slot) =>
+      slot?.id === correctToken.id ? null : slot,
+    )
+    const occupant = nextSlots[nextIndex]
+    if (occupant && occupant.id !== correctToken.id) {
+      nextAvailable = [...nextAvailable, occupant]
+    }
+    nextSlots[nextIndex] = correctToken
+
+    setAvailableWords(nextAvailable)
+    setYourDefinition(nextSlots)
+    setHintedSlots((slots) => (slots.includes(nextIndex) ? slots : [...slots, nextIndex]))
     setHintsLeft((value) => value - 1)
+    setCheckStatus('idle')
+    setFeedback('Hint used: the next word is in the right place.')
   }
 
   const hintDisabled = useMemo(() => {
     if (!gameStarted || isPaused || isGameOver || hintsLeft <= 0) return true
     if (currentPhase === 1) {
-      return (
-        checkStatus === 'correct' ||
-        yourDefinition.every((slot, index) => slot?.originalIndex === index)
-      )
+      return Boolean(choiceResult || hiddenChoiceId)
     }
-    return Boolean(choiceResult || hiddenChoiceId)
+    return (
+      checkStatus === 'correct' ||
+      yourDefinition.every((slot, index) => slot?.originalIndex === index)
+    )
   }, [
     checkStatus,
     choiceResult,
@@ -334,25 +389,24 @@ export default function App() {
   ])
 
   const selectChoice = (option) => {
-    if (currentPhase !== 2 || choiceResult || isPaused || option.id === hiddenChoiceId) return
+    if (currentPhase !== 1 || choiceResult || isPaused || option.id === hiddenChoiceId) return
     setSelectedChoiceId(option.id)
 
     if (option.correct) {
       const nextStreak = streak + 1
-      const awarded = BASE_POINTS * (nextStreak >= 3 ? 2 : 1)
-      const nextScore = score + awarded
       setStreak(nextStreak)
       setMaxStreak((value) => Math.max(value, nextStreak))
-      setScore(nextScore)
-      setWordsSolved((value) => value + 1)
       setChoiceResult('correct')
       setFeedback(
         nextStreak >= 3
-          ? `Correct! ${awarded} points with a ${nextStreak}-word streak (2x).`
-          : `Correct! +${awarded} points.`,
+          ? 'Yes! Streak is on 2x. Now rebuild the definition.'
+          : 'Yes! Now rebuild the definition word by word.',
       )
-      celebrate()
-      advanceTimeout.current = window.setTimeout(() => goToNextWord(nextScore), 1500)
+      advanceTimeout.current = window.setTimeout(() => {
+        setChoiceResult(null)
+        setFeedback('Tap words to rebuild the definition. Green = exact, yellow = close, red = far.')
+        setCurrentPhase(2)
+      }, 900)
       return
     }
 
@@ -405,7 +459,7 @@ export default function App() {
               type="button"
               onClick={handleHint}
               disabled={hintDisabled}
-              title="Phase 1: place the next correct word. Phase 2: hide one wrong card."
+              title="Phase 1: hide one wrong card. Phase 2: place the next correct word."
               className="inline-flex items-center gap-2 rounded-xl border border-amber-300/40 bg-amber-400/15 px-3 py-2 text-sm font-bold text-amber-200 transition hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Lightbulb className="h-4 w-4" />
@@ -474,7 +528,7 @@ export default function App() {
       {currentEntry && !isGameOver ? (
         <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
           <p className="text-center text-sm font-bold uppercase tracking-widest text-blue-300">
-            Phase {currentPhase} · {currentPhase === 1 ? 'Word Unscramble' : 'Multiple Choice'} · Word{' '}
+            Phase {currentPhase} · {currentPhase === 1 ? 'Multiple Choice' : 'Word Unscramble'} · Word{' '}
             {currentWordIndex + 1} / {deck.length}
           </p>
           <h1 className="mt-3 text-center font-display text-5xl font-bold uppercase tracking-wide sm:text-7xl">
@@ -485,30 +539,64 @@ export default function App() {
           <p className="mx-auto mt-3 max-w-2xl text-center text-slate-300">{feedback}</p>
 
           {currentPhase === 1 ? (
+            <ul
+              className={`mt-8 grid gap-4 ${choiceResult === 'wrong' ? 'animate-shake' : ''} ${
+                choiceResult === 'correct' ? 'animate-pop' : ''
+              }`}
+            >
+              {choiceOptions.map((option, index) => {
+                const hidden = option.id === hiddenChoiceId
+                const selected = selectedChoiceId === option.id
+                const showCorrect = choiceResult && option.correct
+                const showWrong = choiceResult === 'wrong' && selected && !option.correct
+                return (
+                  <li key={option.id} className={hidden ? 'hidden' : ''}>
+                    <button
+                      type="button"
+                      disabled={Boolean(choiceResult)}
+                      onClick={() => selectChoice(option)}
+                      className={`flex w-full items-start gap-4 rounded-3xl border px-5 py-5 text-left transition ${
+                        showCorrect
+                          ? 'border-emerald-400 bg-emerald-500/20 shadow-lg shadow-emerald-500/20'
+                          : showWrong
+                            ? 'border-rose-400 bg-rose-500/20'
+                            : 'border-white/10 bg-slate-900/80 hover:border-blue-400/70 hover:bg-slate-800'
+                      }`}
+                    >
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500 to-blue-600 font-display text-lg text-white">
+                        {LETTERS[index]}
+                      </span>
+                      <span className="pt-1 text-lg text-slate-100">{option.text}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
             <section className="mt-8 space-y-6">
               <Board
                 title="Your Definition"
-                hint="Build the sentence here"
+                hint="Colors update as you place each word"
                 shake={checkStatus === 'wrong'}
                 success={checkStatus === 'correct'}
               >
+                <ColorLegend />
                 <div className="flex min-h-24 flex-wrap gap-2">
-                  {yourDefinition.map((slot, index) => (
-                    <button
-                      key={`slot-${index}`}
-                      type="button"
-                      onClick={() => returnTokenToAvailable(index)}
-                      className={`min-h-12 min-w-20 rounded-2xl border px-3 py-2 text-sm font-bold transition ${
-                        slot
-                          ? hintedSlots.includes(index) || checkStatus === 'correct'
-                            ? 'border-emerald-400 bg-emerald-500/20 text-white'
-                            : 'border-pink-400/50 bg-gradient-to-r from-pink-500 to-blue-600 text-white'
-                          : 'border-dashed border-white/20 bg-slate-950/70 text-slate-600'
-                      }`}
-                    >
-                      {slot ? slot.text : '•'}
-                    </button>
-                  ))}
+                  {yourDefinition.map((slot, index) => {
+                    const tone = placementTone(slot, index)
+                    return (
+                      <button
+                        key={`slot-${index}`}
+                        type="button"
+                        title={toneLabel(tone)}
+                        aria-label={slot ? `${slot.text}: ${toneLabel(tone)}` : 'Empty slot'}
+                        onClick={() => returnTokenToAvailable(index)}
+                        className={`min-h-12 min-w-20 rounded-2xl border px-3 py-2 text-sm font-extrabold transition ${tileToneClass(tone)}`}
+                      >
+                        {slot ? slot.text : '•'}
+                      </button>
+                    )
+                  })}
                 </div>
               </Board>
 
@@ -541,36 +629,6 @@ export default function App() {
                 Check Answer
               </button>
             </section>
-          ) : (
-            <ul className={`mt-8 grid gap-4 ${choiceResult === 'wrong' ? 'animate-shake' : ''}`}>
-              {choiceOptions.map((option, index) => {
-                const hidden = option.id === hiddenChoiceId
-                const selected = selectedChoiceId === option.id
-                const showCorrect = choiceResult && option.correct
-                const showWrong = choiceResult === 'wrong' && selected && !option.correct
-                return (
-                  <li key={option.id} className={hidden ? 'hidden' : ''}>
-                    <button
-                      type="button"
-                      disabled={Boolean(choiceResult)}
-                      onClick={() => selectChoice(option)}
-                      className={`flex w-full items-start gap-4 rounded-3xl border px-5 py-5 text-left transition ${
-                        showCorrect
-                          ? 'border-emerald-400 bg-emerald-500/20 shadow-lg shadow-emerald-500/20'
-                          : showWrong
-                            ? 'border-rose-400 bg-rose-500/20'
-                            : 'border-white/10 bg-slate-900/80 hover:border-blue-400/70 hover:bg-slate-800'
-                      }`}
-                    >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500 to-blue-600 font-display text-lg text-white">
-                        {LETTERS[index]}
-                      </span>
-                      <span className="pt-1 text-lg text-slate-100">{option.text}</span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
           )}
         </main>
       ) : null}
@@ -604,8 +662,8 @@ function SetupScreen({ selectedMinutes, onMinutesChange, highScore, onStart }) {
             </span>
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-lg text-slate-300">
-            Unscramble each definition, then choose the right meaning. Build streaks, spend hints
-            wisely, and beat the clock.
+            First pick the right meaning, then rebuild the definition word by word. Build streaks,
+            spend hints wisely, and beat the clock.
           </p>
           {highScore > 0 ? (
             <p className="mt-3 font-bold text-blue-300">Best score: {highScore}</p>
@@ -613,9 +671,9 @@ function SetupScreen({ selectedMinutes, onMinutesChange, highScore, onStart }) {
         </div>
 
         <ol className="mt-8 grid gap-4 sm:grid-cols-3">
-          <HelpCard step="1" title="Unscramble" text="Move word tiles into Your Definition, then press Check Answer." />
-          <HelpCard step="2" title="Choose" text="Pick the correct definition from three big cards." />
-          <HelpCard step="3" title="Hint" text="You get 3 hints: they place the next word or hide one wrong card." />
+          <HelpCard step="1" title="Choose" text="Pick the correct definition from three big cards." />
+          <HelpCard step="2" title="Unscramble" text="Move word tiles into Your Definition, then press Check Answer." />
+          <HelpCard step="3" title="Hint" text="You get 3 hints: they hide one wrong card or place the next word." />
         </ol>
 
         <div className="mt-8 rounded-3xl border border-blue-400/20 bg-blue-950/50 p-5">
@@ -663,6 +721,25 @@ function HelpCard({ step, title, text }) {
       <h2 className="font-display text-xl text-white">{title}</h2>
       <p className="mt-1 text-sm text-slate-300">{text}</p>
     </li>
+  )
+}
+
+function ColorLegend() {
+  return (
+    <ul className="mb-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wide">
+      <li className="inline-flex items-center gap-2 text-emerald-300">
+        <span className="h-3 w-3 rounded-full bg-emerald-400 shadow shadow-emerald-400/80" />
+        Exact place
+      </li>
+      <li className="inline-flex items-center gap-2 text-amber-300">
+        <span className="h-3 w-3 rounded-full bg-amber-400 shadow shadow-amber-400/80" />
+        One spot away
+      </li>
+      <li className="inline-flex items-center gap-2 text-rose-300">
+        <span className="h-3 w-3 rounded-full bg-rose-500 shadow shadow-rose-500/80" />
+        Too far
+      </li>
+    </ul>
   )
 }
 
