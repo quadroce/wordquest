@@ -12,6 +12,9 @@ import {
   Timer,
   Trophy,
   Cookie,
+  ListChecks,
+  Shuffle,
+  Layers,
 } from 'lucide-react'
 import questions from './assets/data/definizionisbagliate.json'
 
@@ -22,6 +25,26 @@ const BASE_POINTS = 100
 const HIGH_SCORE_KEY = 'wordquest-high-score'
 const COOKIE_CONSENT_KEY = 'wordquest-cookie-consent'
 const LETTERS = ['A', 'B', 'C']
+const GAME_MODES = [
+  {
+    id: 'choose',
+    title: 'Choose',
+    text: 'Pick the correct definition from three big cards.',
+    icon: ListChecks,
+  },
+  {
+    id: 'scramble',
+    title: 'Scramble',
+    text: 'Rebuild the definition by placing word tiles in order.',
+    icon: Shuffle,
+  },
+  {
+    id: 'total',
+    title: 'Total',
+    text: 'Choose first, then scramble the definition.',
+    icon: Layers,
+  },
+]
 
 function readCookieConsent() {
   try {
@@ -159,6 +182,7 @@ export default function App() {
   const [gameStarted, setGameStarted] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [selectedMinutes, setSelectedMinutes] = useState(15)
+  const [gameMode, setGameMode] = useState('total')
   const [timeRemaining, setTimeRemaining] = useState(DEFAULT_SECONDS)
 
   const [score, setScore] = useState(0)
@@ -192,22 +216,28 @@ export default function App() {
   const multiplier = streak >= 3 ? 2 : 1
   const timerDanger = timeRemaining > 0 && timeRemaining < 120
 
-  const loadRound = useCallback((nextDeck, index) => {
+  const loadRound = useCallback((nextDeck, index, mode) => {
     const entry = nextDeck[index]
     if (!entry) return
     const tokens = buildTokens(entry, index)
+    const nextMode = mode || gameMode
     setAvailableWords(scrambleTokens(tokens))
     setYourDefinition(Array(tokens.length).fill(null))
     setHintedSlots([])
     setCheckStatus('idle')
     unscrambleAwarded.current = false
-    setFeedback('Pick the definition that matches this word.')
     setChoiceOptions(buildChoices(entry, index))
     setHiddenChoiceId(null)
     setSelectedChoiceId(null)
     setChoiceResult(null)
-    setCurrentPhase(1)
-  }, [])
+    if (nextMode === 'scramble') {
+      setCurrentPhase(2)
+      setFeedback('Tap words to rebuild the definition. Green = exact, yellow = close, red = far.')
+    } else {
+      setCurrentPhase(1)
+      setFeedback('Pick the definition that matches this word.')
+    }
+  }, [gameMode])
 
   const finishGame = useCallback((finalScore) => {
     if (finishedRef.current) return
@@ -231,7 +261,7 @@ export default function App() {
     window.clearTimeout(advanceTimeout.current)
     setDeck(nextDeck)
     setCurrentWordIndex(0)
-    setCurrentPhase(1)
+    setCurrentPhase(gameMode === 'scramble' ? 2 : 1)
     setScore(0)
     setStreak(0)
     setMaxStreak(0)
@@ -241,8 +271,8 @@ export default function App() {
     setIsGameOver(false)
     setIsPaused(false)
     setGameStarted(true)
-    loadRound(nextDeck, 0)
-  }, [loadRound, selectedMinutes])
+    loadRound(nextDeck, 0, gameMode)
+  }, [gameMode, loadRound, selectedMinutes])
 
   const restartToSetup = useCallback(() => {
     window.clearTimeout(advanceTimeout.current)
@@ -310,19 +340,24 @@ export default function App() {
   const completeUnscramble = useCallback(() => {
     if (unscrambleAwarded.current || currentPhase !== 2) return
     unscrambleAwarded.current = true
-    const awarded = BASE_POINTS * (streak >= 3 ? 2 : 1)
+    const nextStreak = gameMode === 'scramble' ? streak + 1 : streak
+    if (gameMode === 'scramble') {
+      setStreak(nextStreak)
+      setMaxStreak((value) => Math.max(value, nextStreak))
+    }
+    const awarded = BASE_POINTS * (nextStreak >= 3 ? 2 : 1)
     const nextScore = score + awarded
     setScore(nextScore)
     setWordsSolved((value) => value + 1)
     setCheckStatus('correct')
     setFeedback(
-      streak >= 3
-        ? `All green! +${awarded} points with a ${streak}-word streak (2x).`
+      nextStreak >= 3
+        ? `All green! +${awarded} points with a ${nextStreak}-word streak (2x).`
         : `All green! +${awarded} points.`,
     )
     celebrate()
     advanceTimeout.current = window.setTimeout(() => goToNextWord(nextScore), 1500)
-  }, [currentPhase, goToNextWord, score, streak])
+  }, [currentPhase, gameMode, goToNextWord, score, streak])
 
   useEffect(() => {
     if (currentPhase !== 2 || isPaused || checkStatus === 'correct') return
@@ -418,6 +453,22 @@ export default function App() {
       setStreak(nextStreak)
       setMaxStreak((value) => Math.max(value, nextStreak))
       setChoiceResult('correct')
+
+      if (gameMode === 'choose') {
+        const awarded = BASE_POINTS * (nextStreak >= 3 ? 2 : 1)
+        const nextScore = score + awarded
+        setScore(nextScore)
+        setWordsSolved((value) => value + 1)
+        setFeedback(
+          nextStreak >= 3
+            ? `Correct! +${awarded} points with a ${nextStreak}-word streak (2x).`
+            : `Correct! +${awarded} points.`,
+        )
+        celebrate()
+        advanceTimeout.current = window.setTimeout(() => goToNextWord(nextScore), 1500)
+        return
+      }
+
       setFeedback(
         nextStreak >= 3
           ? 'Yes! Streak is on 2x. Now rebuild the definition.'
@@ -443,6 +494,8 @@ export default function App() {
         <SetupScreen
           selectedMinutes={selectedMinutes}
           onMinutesChange={setSelectedMinutes}
+          gameMode={gameMode}
+          onGameModeChange={setGameMode}
           highScore={highScore}
           onStart={startGame}
         />
@@ -480,7 +533,13 @@ export default function App() {
               type="button"
               onClick={handleHint}
               disabled={hintDisabled}
-              title="Phase 1: hide one wrong card. Phase 2: place the next correct word."
+              title={
+                gameMode === 'choose'
+                  ? 'Hide one wrong card'
+                  : gameMode === 'scramble'
+                    ? 'Place the next correct word'
+                    : 'Choose: hide one wrong card. Scramble: place the next correct word.'
+              }
               className="inline-flex items-center gap-2 rounded-xl border border-amber-300/40 bg-amber-400/15 px-3 py-2 text-sm font-bold text-amber-200 transition hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Lightbulb className="h-4 w-4" />
@@ -533,6 +592,7 @@ export default function App() {
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             <SummaryCard label="Final Score" value={score} />
             <SummaryCard label="High Score" value={Math.max(highScore, score)} />
+            <SummaryCard label="Game type" value={gameMode === 'total' ? 'Total' : gameMode === 'choose' ? 'Choose' : 'Scramble'} />
             <SummaryCard label="Words Solved" value={wordsSolved} />
             <SummaryCard label="Max Streak" value={maxStreak} />
           </div>
@@ -549,8 +609,12 @@ export default function App() {
       {currentEntry && !isGameOver ? (
         <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
           <p className="text-center text-sm font-bold uppercase tracking-widest text-blue-300">
-            Phase {currentPhase} · {currentPhase === 1 ? 'Multiple Choice' : 'Word Unscramble'} · Word{' '}
-            {currentWordIndex + 1} / {deck.length}
+            {gameMode === 'total'
+              ? `Total · ${currentPhase === 1 ? 'Choose' : 'Scramble'}`
+              : gameMode === 'choose'
+                ? 'Choose'
+                : 'Scramble'}{' '}
+            · Word {currentWordIndex + 1} / {deck.length}
           </p>
           <h1 className="mt-3 text-center font-display text-5xl font-bold uppercase tracking-wide sm:text-7xl">
             <span className="bg-gradient-to-r from-pink-400 via-fuchsia-400 to-blue-500 bg-clip-text text-transparent">
@@ -670,7 +734,16 @@ function Shell({ children }) {
   )
 }
 
-function SetupScreen({ selectedMinutes, onMinutesChange, highScore, onStart }) {
+function SetupScreen({
+  selectedMinutes,
+  onMinutesChange,
+  gameMode,
+  onGameModeChange,
+  highScore,
+  onStart,
+}) {
+  const selectedMode = GAME_MODES.find((mode) => mode.id === gameMode) || GAME_MODES[2]
+
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-4xl flex-col justify-center px-4 py-10 sm:px-6">
       <div className="animate-pop rounded-[2rem] border border-white/10 bg-slate-900/85 p-6 shadow-2xl shadow-pink-500/10 sm:p-10">
@@ -685,20 +758,45 @@ function SetupScreen({ selectedMinutes, onMinutesChange, highScore, onStart }) {
               Quest
             </span>
           </h1>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-slate-300">
-            First pick the right meaning, then rebuild the definition word by word. Build streaks,
-            spend hints wisely, and beat the clock.
-          </p>
+          <p className="mx-auto mt-4 max-w-xl text-lg text-slate-300">{selectedMode.text}</p>
           {highScore > 0 ? (
             <p className="mt-3 font-bold text-blue-300">Best score: {highScore}</p>
           ) : null}
         </div>
 
-        <ol className="mt-8 grid gap-4 sm:grid-cols-3">
-          <HelpCard step="1" title="Choose" text="Pick the correct definition from three big cards." />
-          <HelpCard step="2" title="Unscramble" text="Move word tiles into Your Definition, then press Check Answer." />
-          <HelpCard step="3" title="Hint" text="You get 3 hints: they hide one wrong card or place the next word." />
-        </ol>
+        <div className="mt-8">
+          <p className="mb-4 text-center font-display text-lg text-pink-200">Game type</p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {GAME_MODES.map((mode) => {
+              const selected = mode.id === gameMode
+              const Icon = mode.icon
+              return (
+                <button
+                  key={mode.id}
+                  type="button"
+                  onClick={() => onGameModeChange(mode.id)}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    selected
+                      ? 'border-pink-400 bg-gradient-to-br from-pink-500/20 to-blue-600/20 shadow-lg shadow-pink-500/20'
+                      : 'border-white/10 bg-slate-950/70 hover:border-blue-400/50'
+                  }`}
+                >
+                  <span
+                    className={`mb-3 inline-flex rounded-xl p-2 ${
+                      selected
+                        ? 'bg-gradient-to-br from-pink-500 to-blue-600 text-white'
+                        : 'bg-white/10 text-slate-200'
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <h2 className="font-display text-xl text-white">{mode.title}</h2>
+                  <p className="mt-1 text-sm text-slate-300">{mode.text}</p>
+                </button>
+              )
+            })}
+          </div>
+        </div>
 
         <div className="mt-8 rounded-3xl border border-blue-400/20 bg-blue-950/50 p-5">
           <p className="mb-4 text-center font-display text-lg text-blue-100">Mission length</p>
@@ -794,18 +892,6 @@ function CookieConsent() {
         </div>
       </div>
     </div>
-  )
-}
-
-function HelpCard({ step, title, text }) {
-  return (
-    <li className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-      <p className="mb-2 inline-flex rounded-xl bg-gradient-to-br from-pink-500 to-blue-600 px-2 py-1 text-xs font-bold text-white">
-        {step}
-      </p>
-      <h2 className="font-display text-xl text-white">{title}</h2>
-      <p className="mt-1 text-sm text-slate-300">{text}</p>
-    </li>
   )
 }
 
