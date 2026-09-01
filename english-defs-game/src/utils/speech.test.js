@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { isSpeechSupported, speakText, stopSpeech } from './speech.js'
+import { isSpeechSupported, speakControlLabel, speakText, stopSpeech } from './speech.js'
 
 test('isSpeechSupported is false when the API is missing', () => {
   assert.equal(isSpeechSupported(undefined, class {}), false)
@@ -41,4 +41,11 @@ test('stopSpeech calls cancel when available', () => {
   })
   stopSpeech(undefined)
   assert.equal(cancelled, 1)
+})
+
+test('speakControlLabel names word and meaning playback', () => {
+  assert.equal(speakControlLabel(false, 'word'), 'Read word aloud')
+  assert.equal(speakControlLabel(true, 'word'), 'Stop reading')
+  assert.equal(speakControlLabel(false, 'meaning'), 'Read meaning aloud')
+  assert.equal(speakControlLabel(true, 'meaning'), 'Stop reading')
 })

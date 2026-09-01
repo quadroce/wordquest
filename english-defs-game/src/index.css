@@ -228,6 +228,37 @@ html[data-reading-theme='high-contrast'] .choose-quiz {
   background: var(--choose-primary);
 }
 
+.choose-option-row {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.choose-option-row .choose-option {
+  flex: 1 1 auto;
+}
+
+.choose-option-row .choose-speak {
+  flex-shrink: 0;
+}
+
+.choose-feedback-listen {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.choose-feedback-listen .choose-feedback-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.choose-feedback-listen .choose-speak {
+  flex-shrink: 0;
+}
+
 .choose-option {
   display: flex;
   min-height: 48px;

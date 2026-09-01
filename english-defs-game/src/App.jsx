@@ -28,7 +28,7 @@ import {
   resetReadingPreferences,
   saveReadingPreferences,
 } from './utils/readingPreferences.js'
-import { isSpeechSupported, speakText, stopSpeech } from './utils/speech.js'
+import { isSpeechSupported, speakControlLabel, speakText, stopSpeech } from './utils/speech.js'
 import {
   applyChooseCheck,
   applyNextWord,
@@ -783,40 +783,30 @@ export default function App() {
   )
 }
 
-function SpeakWordButton({ word }) {
-  const [speaking, setSpeaking] = useState(false)
-  const speechAvailable = isSpeechSupported()
+function SpeakTextButton({
+  text,
+  speechId,
+  activeSpeechId,
+  onToggle,
+  kind = 'word',
+  className = 'choose-speak',
+}) {
+  if (!isSpeechSupported()) return null
 
-  useEffect(() => () => stopSpeech(), [])
-
-  if (!speechAvailable) return null
-
-  const toggleSpeech = () => {
-    if (speaking) {
-      stopSpeech()
-      setSpeaking(false)
-      return
-    }
-    const started = speakText(word, {
-      onend: () => setSpeaking(false),
-      onerror: () => setSpeaking(false),
-    })
-    if (started) setSpeaking(true)
-  }
-
-  const label = speaking ? 'Stop reading' : 'Read word aloud'
+  const speaking = activeSpeechId === speechId
+  const label = speakControlLabel(speaking, kind)
 
   return (
     <button
       type="button"
-      className="choose-speak"
-      onClick={toggleSpeech}
+      className={className}
+      onClick={() => onToggle(speechId, text)}
       aria-label={label}
     >
       {speaking ? (
-        <VolumeX className="h-6 w-6" aria-hidden="true" />
+        <VolumeX className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
       ) : (
-        <Volume2 className="h-6 w-6" aria-hidden="true" />
+        <Volume2 className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
       )}
     </button>
   )
@@ -842,14 +832,39 @@ function ChooseQuiz({
   const locked = Boolean(choiceResult)
   const canCheck = Boolean(selectedChoiceId) && !locked
   const [prefs, setPrefs] = useState(loadReadingPreferences)
+  const [activeSpeechId, setActiveSpeechId] = useState(null)
+  const [speechWord, setSpeechWord] = useState(word)
+
+  if (speechWord !== word) {
+    setSpeechWord(word)
+    setActiveSpeechId(null)
+  }
 
   useEffect(() => {
     const next = applyReadingPreferences(prefs)
     saveReadingPreferences(next)
   }, [prefs])
 
+  useEffect(() => {
+    stopSpeech()
+    return () => stopSpeech()
+  }, [word])
+
   const updatePref = (key, value) => {
     setPrefs((current) => ({ ...current, [key]: value }))
+  }
+
+  const toggleSpeech = (id, text) => {
+    if (activeSpeechId === id) {
+      stopSpeech()
+      setActiveSpeechId(null)
+      return
+    }
+    const started = speakText(text, {
+      onend: () => setActiveSpeechId((current) => (current === id ? null : current)),
+      onerror: () => setActiveSpeechId((current) => (current === id ? null : current)),
+    })
+    if (started) setActiveSpeechId(id)
   }
 
   return (
@@ -874,7 +889,13 @@ function ChooseQuiz({
 
         <div className="mt-4 flex items-center gap-3">
           <h1 className="min-w-0 flex-1 leading-[1.5] text-[var(--choose-text)]">{word}</h1>
-          <SpeakWordButton key={word} word={word} />
+          <SpeakTextButton
+            text={word}
+            speechId="word"
+            kind="word"
+            activeSpeechId={activeSpeechId}
+            onToggle={toggleSpeech}
+          />
         </div>
 
         <form
@@ -899,26 +920,34 @@ function ChooseQuiz({
               }
 
               return (
-                <label
-                  key={option.id}
-                  className={`choose-option ${selected ? 'choose-option-selected' : ''} ${
-                    locked ? 'choose-option-disabled' : ''
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="choose-definition"
-                    className="sr-only"
-                    value={option.id}
-                    checked={selected}
-                    disabled={locked}
-                    onChange={() => onSelect(option.id)}
+                <div key={option.id} className="choose-option-row">
+                  <label
+                    className={`choose-option ${selected ? 'choose-option-selected' : ''} ${
+                      locked ? 'choose-option-disabled' : ''
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="choose-definition"
+                      className="sr-only"
+                      value={option.id}
+                      checked={selected}
+                      disabled={locked}
+                      onChange={() => onSelect(option.id)}
+                    />
+                    <span className="choose-answer-text">{option.text}</span>
+                    <span className={stateClass} aria-hidden={!selected}>
+                      {stateLabel}
+                    </span>
+                  </label>
+                  <SpeakTextButton
+                    text={option.text}
+                    speechId={option.id}
+                    kind="meaning"
+                    activeSpeechId={activeSpeechId}
+                    onToggle={toggleSpeech}
                   />
-                  <span className="choose-answer-text">{option.text}</span>
-                  <span className={stateClass} aria-hidden={!selected}>
-                    {stateLabel}
-                  </span>
-                </label>
+                </div>
               )
             })}
           </div>
@@ -932,7 +961,18 @@ function ChooseQuiz({
                       <CircleCheck className="choose-feedback-icon" aria-hidden="true" />
                       Correct
                     </p>
-                    {exampleSentence ? <p className="choose-feedback-body">{exampleSentence}</p> : null}
+                    {exampleSentence ? (
+                      <div className="choose-feedback-listen">
+                        <p className="choose-feedback-body">{exampleSentence}</p>
+                        <SpeakTextButton
+                          text={exampleSentence}
+                          speechId="example"
+                          kind="meaning"
+                          activeSpeechId={activeSpeechId}
+                          onToggle={toggleSpeech}
+                        />
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <>
@@ -940,7 +980,16 @@ function ChooseQuiz({
                       <Info className="choose-feedback-icon" aria-hidden="true" />
                       Not quite
                     </p>
-                    <p className="choose-feedback-body">The correct meaning is: {correctDefinition}</p>
+                    <div className="choose-feedback-listen">
+                      <p className="choose-feedback-body">The correct meaning is: {correctDefinition}</p>
+                      <SpeakTextButton
+                        text={correctDefinition}
+                        speechId="correct-meaning"
+                        kind="meaning"
+                        activeSpeechId={activeSpeechId}
+                        onToggle={toggleSpeech}
+                      />
+                    </div>
                   </>
                 )}
               </div>

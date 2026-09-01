@@ -37,3 +37,9 @@ export function speakText(text, options = {}) {
   speech.speak(utterance)
   return true
 }
+
+export function speakControlLabel(speaking, kind = 'word') {
+  if (speaking) return 'Stop reading'
+  if (kind === 'meaning') return 'Read meaning aloud'
+  return 'Read word aloud'
+}
