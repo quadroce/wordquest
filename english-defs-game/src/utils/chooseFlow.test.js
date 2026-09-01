@@ -12,6 +12,10 @@ import {
   nextStepAfterChoose,
   resumeFromBreakPause,
   shouldOfferBreak,
+  assembledScrambleText,
+  liveScrambleMessage,
+  scrambleControlModel,
+  scrambleSlotStatus,
   takeBreakSnapshot,
 } from './chooseFlow.js'
 
@@ -172,4 +176,23 @@ test('take a break pauses in memory and does not claim reload resume', () => {
 
   assert.equal(canResumeGameAfterReload(), false)
   assert.equal(GAME_PROGRESS_STORAGE_KEY, null)
+})
+
+test('scramble slot status uses text, not colour names', () => {
+  assert.deepEqual(scrambleSlotStatus(null, 0), { kind: 'empty', label: 'Empty' })
+  assert.equal(scrambleSlotStatus({ originalIndex: 2, text: 'old' }, 2).label, 'Right place')
+  assert.equal(scrambleSlotStatus({ originalIndex: 2, text: 'old' }, 1).label, 'Near')
+  assert.equal(scrambleSlotStatus({ originalIndex: 2, text: 'old' }, 0).label, 'Not yet')
+})
+
+test('scramble live message is calm and check is learner-controlled', () => {
+  assert.equal(liveScrambleMessage({ checkStatus: 'correct', allPlaced: true }), 'Correct')
+  assert.equal(
+    liveScrambleMessage({ checkStatus: 'wrong', allPlaced: false }),
+    'Place every word in the sentence first.',
+  )
+  assert.equal(liveScrambleMessage({ checkStatus: 'wrong', allPlaced: true }), 'Not quite. Try another order.')
+  assert.equal(assembledScrambleText([{ text: 'a' }, null, { text: 'castle' }]), 'a castle')
+  assert.equal(scrambleControlModel({ checkStatus: 'idle' }).nextVisible, false)
+  assert.equal(scrambleControlModel({ checkStatus: 'correct' }).tilesLocked, true)
 })

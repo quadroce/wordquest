@@ -135,6 +135,39 @@ export function resumeFromBreakPause(progress) {
   }
 }
 
+export function scrambleSlotStatus(token, slotIndex) {
+  if (!token) return { kind: 'empty', label: 'Empty' }
+  const distance = Math.abs(token.originalIndex - slotIndex)
+  if (distance === 0) return { kind: 'right', label: 'Right place' }
+  if (distance === 1) return { kind: 'near', label: 'Near' }
+  return { kind: 'far', label: 'Not yet' }
+}
+
+export function assembledScrambleText(slots) {
+  return (slots || [])
+    .map((slot) => (slot && slot.text ? String(slot.text).trim() : ''))
+    .filter(Boolean)
+    .join(' ')
+}
+
+export function liveScrambleMessage({ checkStatus, allPlaced }) {
+  if (checkStatus === 'correct') return 'Correct'
+  if (checkStatus === 'wrong' && !allPlaced) return 'Place every word in the sentence first.'
+  if (checkStatus === 'wrong') return 'Not quite. Try another order.'
+  return ''
+}
+
+export function scrambleControlModel({ checkStatus }) {
+  const locked = checkStatus === 'correct'
+  return {
+    tilesLocked: locked,
+    checkEnabled: !locked,
+    nextVisible: locked,
+    checkLabel: 'Check answer',
+    nextLabel: 'Next word',
+  }
+}
+
 export const GAME_PROGRESS_STORAGE_KEY = null
 
 export function canResumeGameAfterReload() {

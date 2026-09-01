@@ -243,6 +243,92 @@ html[data-reading-theme='high-contrast'] .choose-quiz {
   flex-shrink: 0;
 }
 
+.scramble-slots,
+.scramble-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.scramble-tile,
+.scramble-bank-tile {
+  font-family: var(--choose-font);
+  color: var(--choose-text);
+}
+
+.scramble-tile {
+  display: flex;
+  min-height: 48px;
+  min-width: 6.5rem;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  border: 2px solid var(--choose-border);
+  border-radius: 0.75rem;
+  background: var(--choose-surface);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.scramble-tile-index,
+.scramble-tile-status {
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--choose-muted);
+}
+
+.scramble-tile-word {
+  font-size: var(--choose-answer-size);
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.scramble-tile-right {
+  border-color: var(--choose-primary);
+  box-shadow: inset 4px 0 0 var(--choose-primary);
+}
+
+.scramble-tile-right .scramble-tile-status {
+  color: var(--choose-primary);
+}
+
+.scramble-tile-near {
+  border-style: solid;
+  border-color: var(--choose-muted);
+}
+
+.scramble-tile-empty {
+  border-style: dashed;
+}
+
+.scramble-tile:focus-visible,
+.scramble-bank-tile:focus-visible {
+  outline: 3px solid var(--choose-focus);
+  outline-offset: 3px;
+}
+
+.scramble-bank-tile {
+  min-height: 48px;
+  border: 2px solid var(--choose-primary);
+  border-radius: 0.75rem;
+  background: var(--choose-surface);
+  padding: 0.5rem 0.9rem;
+  font-size: var(--choose-answer-size);
+  font-weight: 700;
+}
+
+.scramble-bank-tile:hover:not(:disabled) {
+  background: var(--choose-selected);
+}
+
+.scramble-tile:disabled,
+.scramble-bank-tile:disabled {
+  cursor: not-allowed;
+}
+
 .choose-feedback-listen {
   display: flex;
   min-width: 0;
@@ -558,7 +644,9 @@ html[data-reading-theme='high-contrast'] .choose-quiz {
 
   .choose-option,
   .choose-check,
-  .choose-speak {
+  .choose-speak,
+  .scramble-tile,
+  .scramble-bank-tile {
     transition: none !important;
   }
 }
@@ -573,7 +661,9 @@ html[data-reading-motion='reduced'] .timer-danger {
 
 html[data-reading-motion='reduced'] .choose-option,
 html[data-reading-motion='reduced'] .choose-check,
-html[data-reading-motion='reduced'] .choose-speak {
+html[data-reading-motion='reduced'] .choose-speak,
+html[data-reading-motion='reduced'] .scramble-tile,
+html[data-reading-motion='reduced'] .scramble-bank-tile {
   transition: none !important;
 }
 

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import confetti from 'canvas-confetti'
 import {
-  Check,
   Flame,
   Lightbulb,
   Pause,
@@ -32,9 +31,12 @@ import { isSpeechSupported, speakControlLabel, speakText, stopSpeech } from './u
 import {
   applyChooseCheck,
   applyNextWord,
+  assembledScrambleText,
   exampleSentenceFromEntry,
   liveChooseMessage,
+  liveScrambleMessage,
   nextStepAfterChoose,
+  scrambleSlotStatus,
 } from './utils/chooseFlow.js'
 
 const TIMER_CHOICES = [5, 10, 15, 20]
@@ -145,36 +147,8 @@ function buildChoices(entry, wordIndex) {
   ])
 }
 
-function placementTone(token, slotIndex) {
-  if (!token) return 'empty'
-  const distance = Math.abs(token.originalIndex - slotIndex)
-  if (distance === 0) return 'green'
-  if (distance === 1) return 'yellow'
-  return 'red'
-}
-
 function isPerfectDefinition(slots) {
   return slots.length > 0 && slots.every((slot, index) => slot?.originalIndex === index)
-}
-
-function tileToneClass(tone) {
-  if (tone === 'green') {
-    return 'border-emerald-300 bg-emerald-500 text-white shadow-lg shadow-emerald-400/50 ring-2 ring-emerald-200/80'
-  }
-  if (tone === 'yellow') {
-    return 'border-amber-200 bg-amber-400 text-slate-950 shadow-lg shadow-amber-400/50 ring-2 ring-amber-200'
-  }
-  if (tone === 'red') {
-    return 'border-rose-300 bg-rose-600 text-white shadow-lg shadow-rose-500/50 ring-2 ring-rose-200/80'
-  }
-  return 'border-dashed border-white/20 bg-slate-950/70 text-slate-600'
-}
-
-function toneLabel(tone) {
-  if (tone === 'green') return 'Exact place'
-  if (tone === 'yellow') return 'One spot away'
-  if (tone === 'red') return 'Too far from the correct place'
-  return 'Empty slot'
 }
 
 function celebrate() {
@@ -254,7 +228,7 @@ export default function App() {
     setChoiceResult(null)
     if (nextMode === 'scramble') {
       setCurrentPhase(2)
-      setFeedback('Tap words to rebuild the definition. Green = exact, yellow = close, red = far.')
+      setFeedback('Put the words in the right order.')
     } else {
       setCurrentPhase(1)
       setFeedback('Pick the definition that matches this word.')
@@ -384,7 +358,7 @@ export default function App() {
     setAvailableWords((list) => list.filter((item) => item.id !== tokenId))
     setYourDefinition((slots) => slots.map((slot, index) => (index === emptyIndex ? token : slot)))
     setCheckStatus('idle')
-    setFeedback('Green is exact, yellow is one spot away, red is farther off.')
+    setFeedback('Put the words in the right order.')
   }
 
   const returnTokenToAvailable = (slotIndex) => {
@@ -410,26 +384,16 @@ export default function App() {
     setScore(nextScore)
     setWordsSolved((value) => value + 1)
     setCheckStatus('correct')
-    setFeedback(
-      nextStreak >= 3
-        ? `All green! +${awarded} points with a ${nextStreak}-word streak (2x).`
-        : `All green! +${awarded} points.`,
-    )
+    setFeedback(liveScrambleMessage({ checkStatus: 'correct', allPlaced: true }))
     celebrate()
   }, [currentPhase, gameMode, score, streak])
 
-  useEffect(() => {
-    if (currentPhase !== 2 || isPaused || checkStatus === 'correct') return
-    if (isPerfectDefinition(yourDefinition)) {
-      completeUnscramble()
-    }
-  }, [checkStatus, completeUnscramble, currentPhase, isPaused, yourDefinition])
-
   const checkAnswer = () => {
     if (!currentEntry || currentPhase !== 2 || checkStatus === 'correct' || isPaused) return
-    if (yourDefinition.some((slot) => slot == null)) {
+    const allPlaced = yourDefinition.every((slot) => slot != null)
+    if (!allPlaced) {
       setCheckStatus('wrong')
-      setFeedback('Place every word in Your Definition first.')
+      setFeedback(liveScrambleMessage({ checkStatus: 'wrong', allPlaced: false }))
       return
     }
     if (isPerfectDefinition(yourDefinition)) {
@@ -437,7 +401,7 @@ export default function App() {
       return
     }
     setCheckStatus('wrong')
-    setFeedback('Not all green yet. Yellow is close — red is too far. Try another order!')
+    setFeedback(liveScrambleMessage({ checkStatus: 'wrong', allPlaced: true }))
   }
 
   const handleHint = () => {
@@ -539,7 +503,7 @@ export default function App() {
     stopSpeech()
     if (nextStepAfterChoose(gameMode) === 'continue-scramble') {
       setChoiceResult(null)
-      setFeedback('Tap words to rebuild the definition. Green = exact, yellow = close, red = far.')
+      setFeedback('Put the words in the right order.')
       setCurrentPhase(2)
       return
     }
@@ -564,8 +528,8 @@ export default function App() {
   return (
     <Shell>
       <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-950/90 backdrop-blur">
-        {currentPhase === 1 && !showBreak && !isGameOver ? (
-          <a href="#choose-question" className="skip-link">
+        {currentEntry && !showBreak && !isGameOver ? (
+          <a href={currentPhase === 1 ? '#choose-question' : '#scramble-question'} className="skip-link">
             Skip to question
           </a>
         ) : null}
@@ -705,78 +669,20 @@ export default function App() {
 
       {currentEntry && !isGameOver && !showBreak && currentPhase !== 1 ? (
         <div inert={isPaused ? true : undefined}>
-        <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
-          <p className="text-center text-sm font-bold text-blue-300">
-            {gameMode === 'total' ? 'Total · Scramble' : 'Scramble'} · Word {currentWordIndex + 1} of{' '}
-            {deck.length}
-          </p>
-          <h1 className="mt-3 text-center font-display text-5xl font-bold sm:text-7xl">
-            <span className="text-pink-300">{currentEntry.word}</span>
-          </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-slate-300">{feedback}</p>
-
-          <section className="mt-8 space-y-6">
-              <Board
-                title="Your Definition"
-                hint="Colors update as you place each word"
-                shake={checkStatus === 'wrong'}
-                success={checkStatus === 'correct'}
-              >
-                <ColorLegend />
-                <div className="flex min-h-24 flex-wrap gap-2">
-                  {yourDefinition.map((slot, index) => {
-                    const tone = placementTone(slot, index)
-                    return (
-                      <button
-                        key={`slot-${index}`}
-                        type="button"
-                        title={toneLabel(tone)}
-                        aria-label={slot ? `${slot.text}: ${toneLabel(tone)}` : 'Empty slot'}
-                        onClick={() => returnTokenToAvailable(index)}
-                        className={`min-h-12 min-w-20 rounded-2xl border px-3 py-2 text-sm font-extrabold transition ${tileToneClass(tone)}`}
-                      >
-                        {slot ? slot.text : '•'}
-                      </button>
-                    )
-                  })}
-                </div>
-              </Board>
-
-              <Board title="Available Words" hint="Tap a word to move it up">
-                <div className="flex min-h-20 flex-wrap gap-2">
-                  {availableWords.length === 0 ? (
-                    <p className="text-slate-400">All words are in Your Definition.</p>
-                  ) : (
-                    availableWords.map((token) => (
-                      <button
-                        key={token.id}
-                        type="button"
-                        onClick={() => moveTokenToDefinition(token.id)}
-                        className="rounded-2xl bg-gradient-to-r from-pink-500 to-blue-600 px-4 py-2 font-bold text-white shadow-lg shadow-pink-500/20 transition hover:scale-105"
-                      >
-                        {token.text}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </Board>
-
-              <button
-                type="button"
-                onClick={checkStatus === 'correct' ? () => requestAdvance(score) : checkAnswer}
-                className="glow-cta flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-pink-500 to-blue-600 px-6 py-4 font-display text-2xl text-white"
-              >
-                {checkStatus === 'correct' ? (
-                  'Next word'
-                ) : (
-                  <>
-                    <Check className="h-7 w-7" />
-                    Check Answer
-                  </>
-                )}
-              </button>
-            </section>
-        </main>
+          <ScrambleQuiz
+            word={currentEntry.word}
+            wordNumber={currentWordIndex + 1}
+            wordCount={deck.length}
+            availableWords={availableWords}
+            yourDefinition={yourDefinition}
+            hintedSlots={hintedSlots}
+            checkStatus={checkStatus}
+            feedback={feedback}
+            onPlace={moveTokenToDefinition}
+            onReturn={returnTokenToAvailable}
+            onCheck={checkAnswer}
+            onNext={() => requestAdvance(score)}
+          />
         </div>
       ) : null}
     </Shell>
@@ -809,6 +715,191 @@ function SpeakTextButton({
         <Volume2 className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
       )}
     </button>
+  )
+}
+
+function ScrambleQuiz({
+  word,
+  wordNumber,
+  wordCount,
+  availableWords,
+  yourDefinition,
+  hintedSlots,
+  checkStatus,
+  feedback,
+  onPlace,
+  onReturn,
+  onCheck,
+  onNext,
+}) {
+  const progressPercent = wordCount === 0 ? 0 : (wordNumber / wordCount) * 100
+  const locked = checkStatus === 'correct'
+  const allPlaced = yourDefinition.length > 0 && yourDefinition.every((slot) => slot != null)
+  const liveMessage =
+    liveScrambleMessage({ checkStatus, allPlaced }) ||
+    (feedback && feedback !== 'Put the words in the right order.' ? feedback : '')
+  const sentence = assembledScrambleText(yourDefinition)
+  const [prefs, setPrefs] = useState(loadReadingPreferences)
+  const [activeSpeechId, setActiveSpeechId] = useState(null)
+  const [speechWord, setSpeechWord] = useState(word)
+
+  if (speechWord !== word) {
+    setSpeechWord(word)
+    setActiveSpeechId(null)
+  }
+
+  useEffect(() => {
+    const next = applyReadingPreferences(prefs)
+    saveReadingPreferences(next)
+  }, [prefs])
+
+  useEffect(() => {
+    stopSpeech()
+    return () => stopSpeech()
+  }, [word])
+
+  const updatePref = (key, value) => {
+    setPrefs((current) => ({ ...current, [key]: value }))
+  }
+
+  const toggleSpeech = (id, text) => {
+    if (activeSpeechId === id) {
+      stopSpeech()
+      setActiveSpeechId(null)
+      return
+    }
+    const started = speakText(text, {
+      onend: () => setActiveSpeechId((current) => (current === id ? null : current)),
+      onerror: () => setActiveSpeechId((current) => (current === id ? null : current)),
+    })
+    if (started) setActiveSpeechId(id)
+  }
+
+  return (
+    <main className="choose-quiz min-h-[calc(100svh-5rem)]">
+      <div className="mx-auto w-full max-w-[760px] px-4 py-6 sm:px-6 sm:py-8">
+        <p id="scramble-progress-label" className="text-base text-[var(--choose-muted)]">
+          Word {wordNumber} of {wordCount}
+        </p>
+        <div className="choose-progress-track mt-2" aria-hidden="true">
+          <div className="choose-progress-fill" style={{ width: `${progressPercent}%` }} />
+        </div>
+
+        <ReadingSettings prefs={prefs} onChange={updatePref} onReset={() => setPrefs(resetReadingPreferences())} />
+
+        <p
+          id="scramble-question"
+          tabIndex={-1}
+          className="mt-6 scroll-mt-24 text-[1.125rem] leading-[1.5] text-[var(--choose-text)] outline-none sm:text-[1.25rem]"
+        >
+          Put the words in the right order.
+        </p>
+
+        <div className="mt-4 flex items-center gap-3">
+          <h1 className="min-w-0 flex-1 leading-[1.5] text-[var(--choose-text)]">{word}</h1>
+          <SpeakTextButton
+            text={word}
+            speechId="word"
+            kind="word"
+            activeSpeechId={activeSpeechId}
+            onToggle={toggleSpeech}
+          />
+        </div>
+
+        <section className="mt-6" aria-labelledby="scramble-sentence-label">
+          <div className="mb-3 flex items-center gap-3">
+            <h2 id="scramble-sentence-label" className="min-w-0 flex-1 text-[1.125rem] font-bold leading-[1.5]">
+              Your sentence
+            </h2>
+            {sentence ? (
+              <SpeakTextButton
+                text={sentence}
+                speechId="sentence"
+                kind="meaning"
+                activeSpeechId={activeSpeechId}
+                onToggle={toggleSpeech}
+              />
+            ) : null}
+          </div>
+          <p className="mb-3 text-base leading-[1.5] text-[var(--choose-muted)]">
+            Right place, Near, or Not yet. Slot numbers show the order.
+          </p>
+          <div className="scramble-slots">
+            {yourDefinition.map((slot, index) => {
+              const status = scrambleSlotStatus(slot, index)
+              const hinted = hintedSlots.includes(index)
+              const label = slot
+                ? `Slot ${index + 1}, ${slot.text}, ${status.label}${hinted ? ', kept by hint' : ''}`
+                : `Slot ${index + 1}, empty`
+              return (
+                <button
+                  key={`slot-${index}`}
+                  type="button"
+                  className={`scramble-tile scramble-tile-${status.kind}`}
+                  aria-label={label}
+                  disabled={locked || hinted || !slot}
+                  onClick={() => onReturn(index)}
+                >
+                  <span className="scramble-tile-index">{index + 1}</span>
+                  <span className="scramble-tile-word">{slot ? slot.text : 'Empty'}</span>
+                  <span className="scramble-tile-status">{status.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+
+        <section className="mt-6" aria-labelledby="scramble-bank-label">
+          <h2 id="scramble-bank-label" className="text-[1.125rem] font-bold leading-[1.5]">
+            Word bank
+          </h2>
+          <p className="mt-1 text-base leading-[1.5] text-[var(--choose-muted)]">Tap a word to add it to the next empty slot.</p>
+          <div className="scramble-bank mt-3">
+            {availableWords.length === 0 ? (
+              <p className="text-base text-[var(--choose-muted)]">All words are in your sentence.</p>
+            ) : (
+              availableWords.map((token) => (
+                <button
+                  key={token.id}
+                  type="button"
+                  className="scramble-bank-tile"
+                  disabled={locked}
+                  onClick={() => onPlace(token.id)}
+                >
+                  {token.text}
+                </button>
+              ))
+            )}
+          </div>
+        </section>
+
+        <div id="scramble-status" className="choose-feedback-live" aria-live="polite" aria-atomic="true">
+          {checkStatus === 'correct' ? (
+            <div className="choose-feedback choose-feedback-ok">
+              <p className="choose-feedback-title">
+                <CircleCheck className="choose-feedback-icon" aria-hidden="true" />
+                Correct
+              </p>
+            </div>
+          ) : liveMessage ? (
+            <div className="choose-feedback choose-feedback-info">
+              <p className="choose-feedback-title">
+                <Info className="choose-feedback-icon" aria-hidden="true" />
+                {liveMessage}
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          className="choose-check mt-1 w-full"
+          onClick={locked ? onNext : onCheck}
+        >
+          {locked ? 'Next word' : 'Check answer'}
+        </button>
+      </div>
+    </main>
   )
 }
 
@@ -1283,45 +1374,6 @@ function CookieConsent() {
           </button>
         </div>
       </div>
-    </div>
-  )
-}
-
-function ColorLegend() {
-  return (
-    <ul className="mb-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wide">
-      <li className="inline-flex items-center gap-2 text-emerald-300">
-        <span className="h-3 w-3 rounded-full bg-emerald-400 shadow shadow-emerald-400/80" />
-        Exact place
-      </li>
-      <li className="inline-flex items-center gap-2 text-amber-300">
-        <span className="h-3 w-3 rounded-full bg-amber-400 shadow shadow-amber-400/80" />
-        One spot away
-      </li>
-      <li className="inline-flex items-center gap-2 text-rose-300">
-        <span className="h-3 w-3 rounded-full bg-rose-500 shadow shadow-rose-500/80" />
-        Too far
-      </li>
-    </ul>
-  )
-}
-
-function Board({ title, hint, children, shake = false, success = false }) {
-  return (
-    <div
-      className={`rounded-[1.75rem] border p-5 ${
-        success
-          ? 'border-emerald-400/50 bg-emerald-500/10'
-          : shake
-            ? 'animate-shake border-rose-400/50 bg-rose-500/10'
-            : 'border-white/10 bg-slate-900/80'
-      }`}
-    >
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="font-display text-2xl text-white">{title}</h2>
-        <p className="text-sm text-slate-400">{hint}</p>
-      </div>
-      {children}
     </div>
   )
 }
