@@ -15,8 +15,27 @@ import {
   ListChecks,
   Shuffle,
   Layers,
+  Volume2,
+  VolumeX,
+  CircleCheck,
+  Info,
 } from 'lucide-react'
 import questions from './assets/data/definizionisbagliate.json'
+import {
+  applyReadingPreferences,
+  isMotionReduced,
+  loadReadingPreferences,
+  resetReadingPreferences,
+  saveReadingPreferences,
+} from './utils/readingPreferences.js'
+import { isSpeechSupported, speakText, stopSpeech } from './utils/speech.js'
+import {
+  applyChooseCheck,
+  applyNextWord,
+  exampleSentenceFromEntry,
+  liveChooseMessage,
+  nextStepAfterChoose,
+} from './utils/chooseFlow.js'
 
 const TIMER_CHOICES = [5, 10, 15, 20]
 const DEFAULT_SECONDS = 900
@@ -24,7 +43,6 @@ const HINTS_PER_GAME = 3
 const BASE_POINTS = 100
 const HIGH_SCORE_KEY = 'wordquest-high-score'
 const COOKIE_CONSENT_KEY = 'wordquest-cookie-consent'
-const LETTERS = ['A', 'B', 'C']
 const GAME_MODES = [
   {
     id: 'choose',
@@ -160,6 +178,7 @@ function toneLabel(tone) {
 }
 
 function celebrate() {
+  if (isMotionReduced()) return
   const colors = ['#ec4899', '#3b82f6', '#818cf8', '#f9a8d4', '#38bdf8']
   confetti({ particleCount: 120, spread: 80, origin: { y: 0.65 }, colors })
   confetti({
@@ -207,10 +226,13 @@ export default function App() {
   const [hiddenChoiceId, setHiddenChoiceId] = useState(null)
   const [selectedChoiceId, setSelectedChoiceId] = useState(null)
   const [choiceResult, setChoiceResult] = useState(null)
+  const [showBreak, setShowBreak] = useState(false)
+  const [breakCompletedCount, setBreakCompletedCount] = useState(0)
 
   const finishedRef = useRef(false)
   const advanceTimeout = useRef(null)
   const unscrambleAwarded = useRef(false)
+  const pendingAdvance = useRef(null)
 
   const currentEntry = deck[currentWordIndex]
   const multiplier = streak >= 3 ? 2 : 1
@@ -270,6 +292,9 @@ export default function App() {
     setTimeRemaining(selectedMinutes * 60)
     setIsGameOver(false)
     setIsPaused(false)
+    setShowBreak(false)
+    setBreakCompletedCount(0)
+    pendingAdvance.current = null
     setGameStarted(true)
     loadRound(nextDeck, 0, gameMode)
   }, [gameMode, loadRound, selectedMinutes])
@@ -284,6 +309,9 @@ export default function App() {
     setStreak(0)
     setCurrentPhase(1)
     setCurrentWordIndex(0)
+    setShowBreak(false)
+    setBreakCompletedCount(0)
+    pendingAdvance.current = null
     setTimeRemaining(selectedMinutes * 60)
   }, [selectedMinutes])
 
@@ -315,6 +343,38 @@ export default function App() {
     },
     [currentWordIndex, deck, finishGame, loadRound],
   )
+
+  const requestAdvance = useCallback(
+    (latestScore) => {
+      stopSpeech()
+      window.clearTimeout(advanceTimeout.current)
+      const decision = applyNextWord({
+        currentIndex: currentWordIndex,
+        total: deck.length,
+        score: latestScore,
+      })
+      if (decision.type === 'break') {
+        pendingAdvance.current = decision
+        setBreakCompletedCount(decision.completed)
+        setShowBreak(true)
+        return
+      }
+      if (decision.type === 'finish') {
+        finishGame(latestScore)
+        return
+      }
+      goToNextWord(latestScore)
+    },
+    [currentWordIndex, deck.length, finishGame, goToNextWord],
+  )
+
+  const continueAfterBreak = useCallback(() => {
+    stopSpeech()
+    const decision = pendingAdvance.current
+    pendingAdvance.current = null
+    setShowBreak(false)
+    goToNextWord(decision?.score ?? score)
+  }, [goToNextWord, score])
 
   const moveTokenToDefinition = (tokenId) => {
     if (currentPhase !== 2 || checkStatus === 'correct' || isPaused) return
@@ -356,8 +416,7 @@ export default function App() {
         : `All green! +${awarded} points.`,
     )
     celebrate()
-    advanceTimeout.current = window.setTimeout(() => goToNextWord(nextScore), 1500)
-  }, [currentPhase, gameMode, goToNextWord, score, streak])
+  }, [currentPhase, gameMode, score, streak])
 
   useEffect(() => {
     if (currentPhase !== 2 || isPaused || checkStatus === 'correct') return
@@ -390,6 +449,7 @@ export default function App() {
       )
       if (!distractor) return
       setHiddenChoiceId(distractor.id)
+      setSelectedChoiceId((current) => (current === distractor.id ? null : current))
       setHintsLeft((value) => value - 1)
       setFeedback('Hint used: one wrong card is gone.')
       return
@@ -444,55 +504,46 @@ export default function App() {
     yourDefinition,
   ])
 
-  const selectChoice = (option) => {
-    if (currentPhase !== 1 || choiceResult || isPaused || option.id === hiddenChoiceId) return
-    setSelectedChoiceId(option.id)
+  const confirmChoose = () => {
+    if (choiceResult || isPaused) return
+    const option = choiceOptions.find((item) => item.id === selectedChoiceId)
+    if (!option || option.id === hiddenChoiceId) return
 
-    if (option.correct) {
-      const nextStreak = streak + 1
-      setStreak(nextStreak)
-      setMaxStreak((value) => Math.max(value, nextStreak))
-      setChoiceResult('correct')
+    const outcome = applyChooseCheck(
+      { result: choiceResult, gameMode, streak, score, wordsSolved },
+      option,
+    )
+    if (outcome.ignored) return
 
+    setStreak(outcome.streak)
+    setChoiceResult(outcome.result)
+    if (outcome.result === 'correct') {
+      setMaxStreak((value) => Math.max(value, outcome.streak))
       if (gameMode === 'choose') {
-        const awarded = BASE_POINTS * (nextStreak >= 3 ? 2 : 1)
-        const nextScore = score + awarded
-        setScore(nextScore)
-        setWordsSolved((value) => value + 1)
-        setFeedback(
-          nextStreak >= 3
-            ? `Correct! +${awarded} points with a ${nextStreak}-word streak (2x).`
-            : `Correct! +${awarded} points.`,
-        )
+        setScore(outcome.score)
+        setWordsSolved(outcome.wordsSolved)
         celebrate()
-        advanceTimeout.current = window.setTimeout(() => goToNextWord(nextScore), 1500)
-        return
       }
+    }
+    setFeedback(
+      liveChooseMessage({
+        result: outcome.result,
+        correctDefinition: currentEntry?.correct_definition,
+        example: exampleSentenceFromEntry(currentEntry),
+      }),
+    )
+  }
 
-      setFeedback(
-        nextStreak >= 3
-          ? 'Yes! Streak is on 2x. Now rebuild the definition.'
-          : 'Yes! Now rebuild the definition word by word.',
-      )
-      advanceTimeout.current = window.setTimeout(() => {
-        setChoiceResult(null)
-        setFeedback('Tap words to rebuild the definition. Green = exact, yellow = close, red = far.')
-        setCurrentPhase(2)
-      }, 900)
+  const handleChooseNext = () => {
+    if (!choiceResult || isPaused) return
+    stopSpeech()
+    if (nextStepAfterChoose(gameMode) === 'continue-scramble') {
+      setChoiceResult(null)
+      setFeedback('Tap words to rebuild the definition. Green = exact, yellow = close, red = far.')
+      setCurrentPhase(2)
       return
     }
-
-    setStreak(0)
-    setChoiceResult('wrong')
-    setFeedback('Not this one. Watch the red card — then try again.')
-    advanceTimeout.current = window.setTimeout(() => {
-      if (!currentEntry) return
-      setChoiceOptions(buildChoices(currentEntry, currentWordIndex))
-      setHiddenChoiceId(null)
-      setSelectedChoiceId(null)
-      setChoiceResult(null)
-      setFeedback('The cards are shuffled. Pick the definition that matches this word.')
-    }, 900)
+    requestAdvance(score)
   }
 
   if (!gameStarted) {
@@ -513,6 +564,11 @@ export default function App() {
   return (
     <Shell>
       <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-950/90 backdrop-blur">
+        {currentPhase === 1 && !showBreak && !isGameOver ? (
+          <a href="#choose-question" className="skip-link">
+            Skip to question
+          </a>
+        ) : null}
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
           <p className="font-display text-2xl text-white">
             Word<span className="bg-gradient-to-r from-pink-400 to-blue-400 bg-clip-text text-transparent">Quest</span>
@@ -547,7 +603,7 @@ export default function App() {
                     ? 'Place the next correct word'
                     : 'Choose: hide one wrong card. Scramble: place the next correct word.'
               }
-              className="inline-flex items-center gap-2 rounded-xl border border-amber-300/40 bg-amber-400/15 px-3 py-2 text-sm font-bold text-amber-200 transition hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-40"
+              className="game-hud-btn inline-flex items-center gap-2 rounded-xl border border-amber-300/40 bg-amber-400/15 px-3 py-2 text-sm font-bold text-amber-200 transition hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Lightbulb className="h-4 w-4" />
               HINT · {hintsLeft}
@@ -555,7 +611,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setIsPaused((value) => !value)}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-bold text-slate-100 hover:bg-white/10"
+              className="game-hud-btn inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-bold text-slate-100 hover:bg-white/10"
             >
               {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
               {isPaused ? 'Resume' : 'Pause'}
@@ -563,7 +619,7 @@ export default function App() {
             <button
               type="button"
               onClick={restartToSetup}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-bold text-slate-100 hover:bg-white/10"
+              className="game-hud-btn inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-bold text-slate-100 hover:bg-white/10"
             >
               <RotateCcw className="h-4 w-4" />
               Restart
@@ -613,59 +669,53 @@ export default function App() {
         </Overlay>
       ) : null}
 
-      {currentEntry && !isGameOver ? (
+      {showBreak && !isGameOver && !isPaused ? (
+        <BreakScreen
+          completedCount={breakCompletedCount}
+          onContinue={continueAfterBreak}
+          onTakeBreak={() => {
+            stopSpeech()
+            setIsPaused(true)
+          }}
+        />
+      ) : null}
+
+      {currentEntry && !isGameOver && !showBreak && currentPhase === 1 ? (
+        <div inert={isPaused ? true : undefined}>
+          <ChooseQuiz
+          word={currentEntry.word}
+          wordNumber={currentWordIndex + 1}
+          wordCount={deck.length}
+          options={choiceOptions}
+          hiddenChoiceId={hiddenChoiceId}
+          selectedChoiceId={selectedChoiceId}
+          choiceResult={choiceResult}
+          correctDefinition={currentEntry.correct_definition}
+          exampleSentence={exampleSentenceFromEntry(currentEntry)}
+          nextLabel={nextStepAfterChoose(gameMode) === 'continue-scramble' ? 'Continue' : 'Next word'}
+          onSelect={(id) => {
+            if (choiceResult || isPaused) return
+            setSelectedChoiceId(id)
+          }}
+          onCheck={confirmChoose}
+          onNext={handleChooseNext}
+        />
+        </div>
+      ) : null}
+
+      {currentEntry && !isGameOver && !showBreak && currentPhase !== 1 ? (
+        <div inert={isPaused ? true : undefined}>
         <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
-          <p className="text-center text-sm font-bold uppercase tracking-widest text-blue-300">
-            {gameMode === 'total'
-              ? `Total · ${currentPhase === 1 ? 'Choose' : 'Scramble'}`
-              : gameMode === 'choose'
-                ? 'Choose'
-                : 'Scramble'}{' '}
-            · Word {currentWordIndex + 1} / {deck.length}
+          <p className="text-center text-sm font-bold text-blue-300">
+            {gameMode === 'total' ? 'Total · Scramble' : 'Scramble'} · Word {currentWordIndex + 1} of{' '}
+            {deck.length}
           </p>
-          <h1 className="mt-3 text-center font-display text-5xl font-bold uppercase tracking-wide sm:text-7xl">
-            <span className="bg-gradient-to-r from-pink-400 via-fuchsia-400 to-blue-500 bg-clip-text text-transparent">
-              {currentEntry.word}
-            </span>
+          <h1 className="mt-3 text-center font-display text-5xl font-bold sm:text-7xl">
+            <span className="text-pink-300">{currentEntry.word}</span>
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-center text-slate-300">{feedback}</p>
 
-          {currentPhase === 1 ? (
-            <ul
-              className={`mt-8 grid gap-4 ${choiceResult === 'wrong' ? 'animate-shake' : ''} ${
-                choiceResult === 'correct' ? 'animate-pop' : ''
-              }`}
-            >
-              {choiceOptions.map((option, index) => {
-                const hidden = option.id === hiddenChoiceId
-                const selected = selectedChoiceId === option.id
-                const showCorrect = choiceResult === 'correct' && option.correct
-                const showWrong = choiceResult === 'wrong' && selected && !option.correct
-                return (
-                  <li key={option.id} className={hidden ? 'hidden' : ''}>
-                    <button
-                      type="button"
-                      disabled={Boolean(choiceResult)}
-                      onClick={() => selectChoice(option)}
-                      className={`flex w-full items-start gap-4 rounded-3xl border px-5 py-5 text-left transition ${
-                        showCorrect
-                          ? 'border-emerald-400 bg-emerald-500/20 shadow-lg shadow-emerald-500/20'
-                          : showWrong
-                            ? 'border-rose-400 bg-rose-500/20'
-                            : 'border-white/10 bg-slate-900/80 hover:border-blue-400/70 hover:bg-slate-800'
-                      }`}
-                    >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500 to-blue-600 font-display text-lg text-white">
-                        {LETTERS[index]}
-                      </span>
-                      <span className="pt-1 text-lg text-slate-100">{option.text}</span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          ) : (
-            <section className="mt-8 space-y-6">
+          <section className="mt-8 space-y-6">
               <Board
                 title="Your Definition"
                 hint="Colors update as you place each word"
@@ -713,18 +763,304 @@ export default function App() {
 
               <button
                 type="button"
-                onClick={checkAnswer}
-                disabled={checkStatus === 'correct'}
-                className="glow-cta flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-pink-500 to-blue-600 px-6 py-4 font-display text-2xl text-white disabled:opacity-50"
+                onClick={checkStatus === 'correct' ? () => requestAdvance(score) : checkAnswer}
+                className="glow-cta flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-pink-500 to-blue-600 px-6 py-4 font-display text-2xl text-white"
               >
-                <Check className="h-7 w-7" />
-                Check Answer
+                {checkStatus === 'correct' ? (
+                  'Next word'
+                ) : (
+                  <>
+                    <Check className="h-7 w-7" />
+                    Check Answer
+                  </>
+                )}
               </button>
             </section>
-          )}
         </main>
+        </div>
       ) : null}
     </Shell>
+  )
+}
+
+function SpeakWordButton({ word }) {
+  const [speaking, setSpeaking] = useState(false)
+  const speechAvailable = isSpeechSupported()
+
+  useEffect(() => () => stopSpeech(), [])
+
+  if (!speechAvailable) return null
+
+  const toggleSpeech = () => {
+    if (speaking) {
+      stopSpeech()
+      setSpeaking(false)
+      return
+    }
+    const started = speakText(word, {
+      onend: () => setSpeaking(false),
+      onerror: () => setSpeaking(false),
+    })
+    if (started) setSpeaking(true)
+  }
+
+  const label = speaking ? 'Stop reading' : 'Read word aloud'
+
+  return (
+    <button
+      type="button"
+      className="choose-speak"
+      onClick={toggleSpeech}
+      aria-label={label}
+    >
+      {speaking ? (
+        <VolumeX className="h-6 w-6" aria-hidden="true" />
+      ) : (
+        <Volume2 className="h-6 w-6" aria-hidden="true" />
+      )}
+    </button>
+  )
+}
+
+function ChooseQuiz({
+  word,
+  wordNumber,
+  wordCount,
+  options,
+  hiddenChoiceId,
+  selectedChoiceId,
+  choiceResult,
+  correctDefinition,
+  exampleSentence,
+  nextLabel,
+  onSelect,
+  onCheck,
+  onNext,
+}) {
+  const visibleOptions = options.filter((option) => option.id !== hiddenChoiceId)
+  const progressPercent = wordCount === 0 ? 0 : (wordNumber / wordCount) * 100
+  const locked = Boolean(choiceResult)
+  const canCheck = Boolean(selectedChoiceId) && !locked
+  const [prefs, setPrefs] = useState(loadReadingPreferences)
+
+  useEffect(() => {
+    const next = applyReadingPreferences(prefs)
+    saveReadingPreferences(next)
+  }, [prefs])
+
+  const updatePref = (key, value) => {
+    setPrefs((current) => ({ ...current, [key]: value }))
+  }
+
+  return (
+    <main className="choose-quiz min-h-[calc(100svh-5rem)]">
+      <div className="mx-auto w-full max-w-[760px] px-4 py-6 sm:px-6 sm:py-8">
+        <p id="choose-progress-label" className="text-base text-[var(--choose-muted)]">
+          Word {wordNumber} of {wordCount}
+        </p>
+        <div className="choose-progress-track mt-2" aria-hidden="true">
+          <div className="choose-progress-fill" style={{ width: `${progressPercent}%` }} />
+        </div>
+
+        <ReadingSettings prefs={prefs} onChange={updatePref} onReset={() => setPrefs(resetReadingPreferences())} />
+
+        <p
+          id="choose-question"
+          tabIndex={-1}
+          className="mt-6 scroll-mt-24 text-[1.125rem] leading-[1.5] text-[var(--choose-text)] outline-none sm:text-[1.25rem]"
+        >
+          Choose the correct meaning.
+        </p>
+
+        <div className="mt-4 flex items-center gap-3">
+          <h1 className="min-w-0 flex-1 leading-[1.5] text-[var(--choose-text)]">{word}</h1>
+          <SpeakWordButton key={word} word={word} />
+        </div>
+
+        <form
+          className="mt-6"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (canCheck) onCheck()
+          }}
+        >
+          <div role="radiogroup" aria-labelledby="choose-question" className="grid gap-3">
+            {visibleOptions.map((option) => {
+              const selected = selectedChoiceId === option.id
+              let stateLabel = 'Selected'
+              let stateClass = 'choose-option-state'
+              if (locked && selected) {
+                stateLabel = 'Your answer'
+                stateClass += ' choose-option-state-visible'
+              } else if (selected) {
+                stateClass += ' choose-option-state-visible'
+              } else {
+                stateClass += ' choose-option-state-hidden'
+              }
+
+              return (
+                <label
+                  key={option.id}
+                  className={`choose-option ${selected ? 'choose-option-selected' : ''} ${
+                    locked ? 'choose-option-disabled' : ''
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="choose-definition"
+                    className="sr-only"
+                    value={option.id}
+                    checked={selected}
+                    disabled={locked}
+                    onChange={() => onSelect(option.id)}
+                  />
+                  <span className="choose-answer-text">{option.text}</span>
+                  <span className={stateClass} aria-hidden={!selected}>
+                    {stateLabel}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+
+          <div id="choose-status" className="choose-feedback-live" aria-live="polite" aria-atomic="true">
+            {choiceResult ? (
+              <div className={`choose-feedback ${choiceResult === 'correct' ? 'choose-feedback-ok' : 'choose-feedback-info'}`}>
+                {choiceResult === 'correct' ? (
+                  <>
+                    <p className="choose-feedback-title">
+                      <CircleCheck className="choose-feedback-icon" aria-hidden="true" />
+                      Correct
+                    </p>
+                    {exampleSentence ? <p className="choose-feedback-body">{exampleSentence}</p> : null}
+                  </>
+                ) : (
+                  <>
+                    <p className="choose-feedback-title">
+                      <Info className="choose-feedback-icon" aria-hidden="true" />
+                      Not quite
+                    </p>
+                    <p className="choose-feedback-body">The correct meaning is: {correctDefinition}</p>
+                  </>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <button
+            type={locked ? 'button' : 'submit'}
+            className="choose-check mt-1 w-full"
+            disabled={!locked && !canCheck}
+            onClick={locked ? onNext : undefined}
+          >
+            {locked ? nextLabel : 'Check answer'}
+          </button>
+        </form>
+      </div>
+    </main>
+  )
+}
+
+function BreakScreen({ completedCount, onContinue, onTakeBreak }) {
+  return (
+    <main className="choose-quiz min-h-[calc(100svh-5rem)]">
+      <div className="mx-auto flex w-full max-w-[760px] flex-col justify-center px-4 py-10 sm:px-6">
+        <h1 className="text-[1.75rem] font-bold leading-[1.5] text-[var(--choose-text)]">
+          Great work. You completed {completedCount} words.
+        </h1>
+        <p className="mt-4 text-[1.125rem] leading-[1.5] text-[var(--choose-muted)]">
+          You can keep going, or pause the timer and rest.
+        </p>
+        <p className="mt-3 text-base leading-[1.5] text-[var(--choose-muted)]">
+          A pause keeps your place in this browser tab. Closing the page starts a new game.
+        </p>
+        <div className="mt-8 grid gap-3">
+          <button type="button" className="choose-check w-full" onClick={onContinue}>
+            Continue
+          </button>
+          <button type="button" className="reading-reset w-full" onClick={onTakeBreak}>
+            Take a break
+          </button>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+function ReadingSettings({ prefs, onChange, onReset }) {
+  return (
+    <details className="reading-settings">
+      <summary>
+        Reading settings
+        <span className="reading-settings-toggle" aria-hidden="true" />
+      </summary>
+      <div className="reading-settings-body">
+        <SettingGroup
+          legend="Text size"
+          name="reading-size"
+          value={prefs.textSize}
+          onChange={(value) => onChange('textSize', value)}
+          options={[
+            { value: 'standard', label: 'Standard' },
+            { value: 'large', label: 'Large' },
+          ]}
+        />
+        <SettingGroup
+          legend="Colour theme"
+          name="reading-theme"
+          value={prefs.theme}
+          onChange={(value) => onChange('theme', value)}
+          options={[
+            { value: 'warm-light', label: 'Warm light' },
+            { value: 'dark', label: 'Dark' },
+            { value: 'high-contrast', label: 'High contrast' },
+          ]}
+        />
+        <SettingGroup
+          legend="Reading font"
+          name="reading-font"
+          value={prefs.font}
+          onChange={(value) => onChange('font', value)}
+          options={[
+            { value: 'standard', label: 'Standard' },
+            { value: 'clear', label: 'Clear reading font' },
+          ]}
+        />
+        <SettingGroup
+          legend="Motion"
+          name="reading-motion"
+          value={prefs.motion}
+          onChange={(value) => onChange('motion', value)}
+          options={[
+            { value: 'standard', label: 'Standard' },
+            { value: 'reduced', label: 'Reduced' },
+          ]}
+        />
+        <button type="button" className="reading-reset" onClick={onReset}>
+          Reset settings
+        </button>
+      </div>
+    </details>
+  )
+}
+
+function SettingGroup({ legend, name, value, onChange, options }) {
+  return (
+    <fieldset>
+      <legend>{legend}</legend>
+      {options.map((option) => (
+        <label key={option.value}>
+          <input
+            type="radio"
+            name={name}
+            value={option.value}
+            checked={value === option.value}
+            onChange={() => onChange(option.value)}
+          />
+          {option.label}
+        </label>
+      ))}
+    </fieldset>
   )
 }
 

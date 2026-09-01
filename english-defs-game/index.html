@@ -1,7 +1,33 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-reading-theme="warm-light" data-reading-font="standard" data-reading-size="standard" data-reading-motion="standard">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      try {
+        var stored = JSON.parse(localStorage.getItem('wordquest-reading-settings') || 'null')
+        var root = document.documentElement
+        if (stored && typeof stored === 'object') {
+          if (stored.textSize === 'standard' || stored.textSize === 'large') {
+            root.setAttribute('data-reading-size', stored.textSize)
+          }
+          if (
+            stored.theme === 'warm-light' ||
+            stored.theme === 'dark' ||
+            stored.theme === 'high-contrast'
+          ) {
+            root.setAttribute('data-reading-theme', stored.theme)
+          }
+          if (stored.font === 'standard' || stored.font === 'clear') {
+            root.setAttribute('data-reading-font', stored.font)
+          }
+          if (stored.motion === 'standard' || stored.motion === 'reduced') {
+            root.setAttribute('data-reading-motion', stored.motion)
+          }
+        }
+      } catch {
+        /* keep defaults */
+      }
+    </script>
     <script>
       window.dataLayer = window.dataLayer || []
       function gtag() {
