@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { isSpeechSupported, speakControlLabel, speakText, stopSpeech } from './speech.js'
+import {
+  isSpeechSupported,
+  pickEnglishMaleVoice,
+  speakControlLabel,
+  speakText,
+  stopSpeech,
+} from './speech.js'
 
 test('isSpeechSupported is false when the API is missing', () => {
   assert.equal(isSpeechSupported(undefined, class {}), false)
@@ -22,14 +28,39 @@ test('speakText cancels previous speech then speaks', () => {
     speak(utterance) {
       events.push(utterance.text)
     },
+    getVoices() {
+      return [{ name: 'Daniel', lang: 'en-GB' }]
+    },
   }
   class FakeUtterance {
     constructor(text) {
       this.text = text
+      this.lang = ''
+      this.voice = null
     }
   }
-  assert.equal(speakText('oak', { speech, Utterance: FakeUtterance }), true)
+  assert.equal(
+    speakText('oak', { speech, Utterance: FakeUtterance, voices: [{ name: 'Daniel', lang: 'en-GB' }] }),
+    true,
+  )
   assert.deepEqual(events, ['cancel', 'oak'])
+})
+
+test('pickEnglishMaleVoice prefers British male voices', () => {
+  const voices = [
+    { name: 'Samantha', lang: 'en-US' },
+    { name: 'Google UK English Male', lang: 'en-GB' },
+    { name: 'Google US English', lang: 'en-US' },
+  ]
+  assert.equal(pickEnglishMaleVoice(voices)?.name, 'Google UK English Male')
+})
+
+test('pickEnglishMaleVoice falls back to en-US male when no British male exists', () => {
+  const voices = [
+    { name: 'Samantha', lang: 'en-US' },
+    { name: 'Microsoft David Desktop', lang: 'en-US' },
+  ]
+  assert.equal(pickEnglishMaleVoice(voices)?.name, 'Microsoft David Desktop')
 })
 
 test('stopSpeech calls cancel when available', () => {
