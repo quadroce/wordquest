@@ -125,6 +125,9 @@ body {
   --choose-hover: #f3efe3;
   --choose-track: #e7e1d2;
   --choose-check-fg: #ffffff;
+  --scramble-right: #15803d;
+  --scramble-near: #ca8a04;
+  --scramble-far: #b91c1c;
   --choose-font: "Nunito", Arial, sans-serif;
   --choose-answer-size: 18px;
   --choose-answer-size-lg: 20px;
@@ -166,6 +169,9 @@ html[data-reading-theme='dark'] .choose-quiz {
   --choose-hover: #334155;
   --choose-track: #334155;
   --choose-check-fg: #0f172a;
+  --scramble-right: #4ade80;
+  --scramble-near: #facc15;
+  --scramble-far: #f87171;
 }
 
 html[data-reading-theme='high-contrast'] .choose-quiz {
@@ -186,6 +192,9 @@ html[data-reading-theme='high-contrast'] .choose-quiz {
   --choose-hover: #1a1a00;
   --choose-track: #333333;
   --choose-check-fg: #000000;
+  --scramble-right: #00ff00;
+  --scramble-near: #ffff00;
+  --scramble-far: #ff3333;
 }
 
 .choose-quiz h1 {
@@ -257,6 +266,7 @@ html[data-reading-theme='high-contrast'] .choose-quiz {
 }
 
 .scramble-tile {
+  position: relative;
   display: flex;
   min-height: 48px;
   min-width: 6.5rem;
@@ -266,8 +276,11 @@ html[data-reading-theme='high-contrast'] .choose-quiz {
   gap: 0.1rem;
   border: 2px solid var(--choose-border);
   border-radius: 0.75rem;
-  background: var(--choose-surface);
-  padding: 0.5rem 0.75rem;
+  background-color: var(--choose-surface);
+  background-repeat: no-repeat;
+  background-position: top;
+  background-size: 100% 0.55rem;
+  padding: 0.85rem 0.75rem 0.5rem;
   text-align: left;
 }
 
@@ -287,17 +300,15 @@ html[data-reading-theme='high-contrast'] .choose-quiz {
 }
 
 .scramble-tile-right {
-  border-color: var(--choose-primary);
-  box-shadow: inset 4px 0 0 var(--choose-primary);
-}
-
-.scramble-tile-right .scramble-tile-status {
-  color: var(--choose-primary);
+  background-image: linear-gradient(var(--scramble-right), var(--scramble-right));
 }
 
 .scramble-tile-near {
-  border-style: solid;
-  border-color: var(--choose-muted);
+  background-image: linear-gradient(var(--scramble-near), var(--scramble-near));
+}
+
+.scramble-tile-far {
+  background-image: linear-gradient(var(--scramble-far), var(--scramble-far));
 }
 
 .scramble-tile-empty {

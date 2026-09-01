@@ -822,7 +822,7 @@ function ScrambleQuiz({
             ) : null}
           </div>
           <p className="mb-3 text-base leading-[1.5] text-[var(--choose-muted)]">
-            Right place, Near, or Not yet. Slot numbers show the order.
+            Green band: right place. Yellow band: near. Red band: not yet. Slot numbers show the order.
           </p>
           <div className="scramble-slots">
             {yourDefinition.map((slot, index) => {
